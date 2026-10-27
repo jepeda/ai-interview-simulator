@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": { "@clinic/*": ["src/clinic/*"], "@payouts/*": ["src/payouts/*"], "@remits/*": ["src/remits/*"], "@earnings/*": ["src/earnings/*"], "@sandbox/*": ["src/sandbox/*"], "@warmup/*": ["src/warmup/*"] }
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}

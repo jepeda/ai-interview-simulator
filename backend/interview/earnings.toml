@@ -1,0 +1,292 @@
+# AI-interview simulation content, read by backend/trainer/interview.py.
+# `interviewer_notes` are HIDDEN from the candidate: only the AI interviewer persona sees them.
+
+id = "ai3"
+title = "Provider earnings: rate increase not applied"
+minutes = 60
+order = 3
+app = "earnings"
+api_port = 8715
+portal_path = "/earnings.html"
+portal_title = "Earnings dashboard"
+app_summary = '''
+The app is Acme Health's provider earnings dashboard. The backend is a FastAPI + SQLAlchemy package in
+backend/workspace/earnings (port 8715): providers' effective-dated fee schedules (ContractedRate),
+sessions (Appointment) and the earnings computed from them (services/rates.py, services/earnings.py,
+services/rate_card.py). The frontend is React + TypeScript in frontend/src/earnings (DashboardApp.tsx,
+chart.ts, format.ts, api.ts), served at http://127.0.0.1:5173/earnings.html. README.md in the backend
+package has the codebase tour and the rate policy.
+'''
+
+company_context = '''
+Acme Health helps therapists ("providers") take insurance. Acme Health contracts a **rate per session** with
+each provider for every payer (Aetna, Cigna, Optum) and type of service (CPT code), and pays that
+rate for every completed session, whether or not the insurer has paid Acme Health yet. Rates change over
+time: mid-year increases, new payer contracts, annual renegotiations. Network Ops records each change
+as a new **effective-dated** entry in the provider's fee schedule.
+
+You've joined the Provider Payments team. The codebase is a simplified slice: a FastAPI +
+SQLAlchemy **earnings API** (`backend/workspace/earnings`, port 8715) and the React + TypeScript
+**earnings dashboard** (`frontend/src/earnings`, open http://127.0.0.1:5173/earnings.html) where
+providers see their earnings for the year and their rate card. `README.md` has the tour and the
+rate policy.
+'''
+
+ticket = '''
+### Support ticket #6842 · Priority: High · Provider Payments
+
+**From:** Rosa Delgado, LCSW (Austin, TX) · via Provider Support
+**Assigned to:** you
+
+> Hi, my Aetna rate for **60-minute sessions went up from $158 to $172 on July 1**. I have the email,
+> and the "Your rates" box on my dashboard says **$172.00 since Jul 1, 2026** too. But when I click
+> into my months, **every Aetna 60-minute session since July still shows $158.00**. (My 45-minute
+> Aetna sessions went up fine, $125 to $136.) The dashboard says I've earned **$19,897.00** this
+> year; by my math it should be about $238 more. July looked right when I checked at the start of
+> August, so something changed since then.
+>
+> Also the monthly chart is just wrong: it says I made **$2,208 in August**, but I was on leave the
+> **entire month of August** and didn't see a single client! And **October shows nothing**, even
+> though I've had 13 sessions this month. When I click on August it says "No paid sessions this
+> month", which is at least true.
+
+**Support notes:**
+- Reproduced on the dashboard: signed in as Rosa Delgado, LCSW → year 2026.
+- Network Ops: her fee schedule is correct ("it was audited in August"). Aetna 90837 is $172.00
+  effective 2026-07-01.
+- Finance confirms her 2026 earnings to date should be **$20,135.00**.
+- No other provider has complained.
+
+**Your task:** find the root cause(s), fix them, and make sure it can't silently happen again.
+The bug's tests are already in the file tree (`backend/tests/earnings/test_bug_rate_lookup.py`,
+`frontend/tests/earnings/chart.test.ts`). When they pass, the feature requests unlock.
+'''
+
+interviewer_notes = '''
+ROLE: You are the interviewer, a senior engineer on Acme Health's Provider Payments team. Be friendly
+and concise. You are a domain resource: answer domain and product questions directly. You are NOT a
+debugger for the candidate: do not name files, functions or root causes. If the candidate asks you to
+just tell them the fix, redirect ("What have you found so far?", "What does the API return for a
+July session? And the rate card?"). Only confirm or deny a specific hypothesis the candidate states
+after real investigation ("Is the lookup taking the last-entered rate instead of the latest effective
+date?" -> "Good hypothesis. How would you confirm it?" -> once they show evidence, "Yes, that's it").
+
+GLOSSARY
+- Provider: a therapist (LCSW, PsyD, LPC...). Rosa Delgado, LCSW (id 1) is the ticket's provider.
+- CPT code: billing code for the service. 90791 = intake (first visit), 90834 = 45-min
+  psychotherapy, 90837 = 60-min psychotherapy.
+- Payer: the insurer billed (Aetna, Cigna, Optum).
+- Fee schedule / contracted rate: what Acme Health pays the provider per session for (payer, CPT).
+  Effective-dated: an entry applies from its effective_date until a later entry for the same
+  (payer, CPT) takes effect. No end dates.
+- Correction: Ops never edits a fee-schedule entry (Finance audits them). To fix a mistake they add a
+  new entry with the SAME effective date; the later-entered one wins. It's in the README.
+- Paid on: Acme Health pays each week's completed sessions the Friday of the following week.
+- Adjustment: one-off back pay / stipend / recoupment. NOT part of this dashboard (used by the
+  1099 feature only).
+
+WHAT HAPPENED TO ROSA (data, all correct per policy). Her Aetna 90837 entries, in entry order:
+  1. entered 2025-12-08: $148.00 effective 2026-01-01   (typo: the contract says $158)
+  2. entered 2026-05-14: $172.00 effective 2026-07-01   (mid-year increase)
+  3. entered 2026-08-20: $158.00 effective 2026-01-01   (Ops' correction of #1, same date)
+  4. entered 2026-10-02: $180.00 effective 2027-01-01   (next year's increase, scheduled)
+Finance paid her $340 back pay on Aug 28 for the Jan-Jun typo (34 sessions x $10). Not on the
+dashboard.
+
+THE BUG (do not volunteer this). Two layers.
+1) Backend (services/rates.py, RateTable.entry_on): it keeps each (payer, CPT)'s entries in the order
+   it receives them and returns `applicable[-1]`, the LAST-ENTERED entry with effective_date <= day.
+   The repository (`repositories/rates.list_for_provider`) returns entries in ENTRY order
+   (created_at), because that's the audit trail GET /rates shows. So "last entered" was treated as
+   "latest effective". Before Aug 20 that happened to work for July (entry #2 was the last entered).
+   After the correction (#3) was entered, every session from Jul 1 on picks #3 = $158.
+   The rate card uses a different, correct path (SQL in repositories/rates.in_effect: ORDER BY
+   effective_date DESC, id DESC), which is why the "Your rates" box says $172.
+   Only Aetna 90837 is affected (the only key with an out-of-order entry), which is why her 45-minute
+   rate looks fine. Other providers have no out-of-order entries.
+   Arithmetic: 17 completed Aetna 90837 sessions from Jul 1 to Oct 23 (Jul 1, 6, 13, 15, 20, 27, 29;
+   Sep 9, 14, 21, 23, 28; Oct 5, 7, 12, 19, 21) x ($172 - $158) = $238.00.
+   Dashboard $19,897.00 + $238.00 = Finance's $20,135.00. July $1,950.00 -> $2,048.00 (7 sessions),
+   Sep $2,208.00 -> $2,278.00, Oct $1,892.00 -> $1,962.00, Aetna by-payer $12,624.00 -> $12,862.00.
+   Correct fix: inside RateTable, order each key's entries by precedence (effective_date, then
+   created_at (or id) so the later-entered correction wins ties) and pick the last applicable; or
+   max(applicable, key=lambda e: (e.effective_date, e.created_at, e.id)). Bisect on sorted dates is
+   fine too. Strong: unify the "which entry applies" rule in one place (or at least make both paths
+   agree, and add a test that the rate card and earnings agree, which exists).
+   Weak fixes the tests catch:
+   - Changing list_for_provider's ORDER BY to effective_date: fixes earnings but reorders the audit
+     trail GET /rates (test_rate_history_stays_in_the_order_ops_entered_it fails). Good discussion:
+     a shared repository function has two callers with different needs.
+   - max(applicable, key=lambda e: e.effective_date): on the Jan 1 tie, max() returns the FIRST
+     maximal element = the $148 typo, so Jan-Jun sessions break
+     (test_correction_replaces_the_original_entry_for_its_dates).
+   - Deleting the typo row / editing the DB or seed: violates the append-only policy and fixes nothing
+     in code; the tests build their own data.
+   - Calling the SQL in_effect() per session: correct, but N+1 (one query per session, ~130 for a
+     year). Acceptable if they say so; better to keep the in-memory table.
+2) Frontend (frontend/src/earnings/chart.ts, monthlyBars): it assigns `months[i]` to the i-th bar
+   (Jan..Dec) by POSITION. The API only lists months WITH sessions (documented in schemas.py), and
+   Rosa had none in August, so from August on every bar shows the NEXT month's data: "Aug" shows
+   September ($2,208 with the backend bug, $2,278 after the fix), "Sep" shows October, "Oct" is
+   empty. The bar's `month` key is computed correctly, so clicking "Aug" fetches August and shows
+   "No paid sessions": the label and the data disagree. Fix: index the API months by their `month`
+   key (Map/object) and look each bar up by key. Same bug hits any provider who started mid-year
+   (their first month would show as January).
+   Weak: making the API return all 12 months instead (acceptable as an extra, but the chart must not
+   depend on position; the vitest tests call monthlyBars with sparse input). Sorting the months
+   first doesn't help.
+
+Answers to likely questions:
+- "Which rate applies to a session?" -> The entry in effect on the date of service: latest
+  effective_date <= service_date; on a tie, the later-entered entry (a correction). When it was
+  entered doesn't matter otherwise.
+- "Why not just edit the bad row?" -> Fee schedules are audited by Finance; entries are append-only.
+- "Is the data wrong? Should I fix Rosa's rows?" -> No, the data follows the policy exactly.
+- "Was she actually underpaid?" -> Payouts run in a separate service that snapshots the amount when
+  paying; it paid her $172. This dashboard recomputes from the fee schedule, so it's display only,
+  but providers budget around it and Finance uses it for 1099 prep. Good follow-ups: was anyone
+  else affected (query for keys with out-of-order entries), and should paid amounts be snapshotted.
+- "Can I change GET /rates order?" -> No, Ops and Finance read it as the audit trail, in entry order.
+- "Can I change the API response shape?" -> Prefer not to remove/rename (the mobile app uses it).
+  Adding fields is fine.
+- "Should the dashboard include adjustments/back pay?" -> No, out of scope; it's session earnings.
+- "Tie-break by created_at or id?" -> Either; created_at matches the policy wording ("entered last").
+- "What's today?" -> The get_today dependency (US Eastern date). Tests freeze it at 2026-10-23.
+
+SIGNALS
+Strong: reproduces first (dashboard + Swagger: /earnings/2026-07 vs /rate-card vs /rates), reads the
+README rate policy, notices the two code paths disagree, explains why July "used to be right"
+(the August correction), checks why only 90837 is affected, uses the AI for search/explanation then
+verifies, fixes both layers, keeps the audit trail order, runs tests, mentions impact (other
+providers with out-of-order entries, 1099 numbers, snapshotting paid amounts).
+Weak: edits code before understanding it, "fixes" the data, reorders the shared repository query
+without noticing the second caller, fixes only the chart or only the backend, pastes AI output
+without reading it, never runs tests, goes silent.
+'''
+
+[[feature]]
+id = "schedule"
+title = "Schedule a rate change"
+summary = "Let Network Ops schedule (and cancel) future rate changes through the API."
+spec = '''
+**From:** Dana (Network Ops lead)
+
+Today my team schedules rate increases by asking an engineer to run SQL. We'd like an endpoint:
+
+- `POST /providers/{id}/rates` with the payer, the CPT code, the new rate (in cents) and the date it
+  takes effect (plus an optional note). It should show up on the provider's rate card as
+  "upcoming" right away.
+- Validate it: no changes in the past, no nonsense rates or codes, and we don't want two pending
+  changes for the same payer and service fighting each other.
+- `DELETE /providers/{id}/rates/{rate_id}` to cancel a change we scheduled by mistake. Rates that
+  are already in effect are part of the audit trail and must never be deleted.
+
+Open questions are welcome. Ask me (the interviewer) anything that isn't clear.
+'''
+interviewer_notes = '''
+Answers (the tests check these exact behaviors; tests freeze today at 2026-10-23):
+- POST body: {"payer", "cpt_code", "rate_cents", "effective_date", "note" (optional, default "")}.
+  Success: 201 with the created entry, same shape as GET /rates items (id, payer, cpt_code,
+  rate_cents, effective_date, created_at, note). created_at = now (UTC). It appears last in GET /rates
+  and as `upcoming` on the rate card.
+- effective_date must be strictly AFTER today (get_today): today itself is rejected (today's sessions
+  may already be documented). 422.
+- rate_cents must be > 0 -> else 422. Decreases vs the current rate ARE allowed (renegotiations).
+- payer must be one of Aetna, Cigna, Optum; cpt_code one of 90791, 90834, 90837 -> else 422 (a
+  pydantic Literal is the neat way). A brand-new (payer, CPT) combination IS allowed: that's how a
+  new contract starts; its rate card row then has current = null and upcoming set.
+- Conflict: if a FUTURE entry (effective_date > today) already exists for the same provider + payer
+  + CPT, any new POST for that key is 409 with error code "rate_change_conflict", whatever its
+  date. One pending change per key; cancel it first. Past entries never conflict. Other CPTs/payers
+  are independent.
+- DELETE: 204 for a future entry (hard delete is fine: it never applied, so it's not audit history).
+  Entry already in effect (effective_date <= today) -> 409 code "rate_in_effect". Unknown rate id or
+  a rate belonging to ANOTHER provider -> 404. Unknown provider -> 404 for both endpoints.
+- Errors use the existing {"error": {"code", "message"}} shape: raise errors.Conflict /
+  InvalidRequest / NotFound with the code, don't raise HTTPException.
+- Good engineering: a service function taking `today` (from the Today dependency) so it's testable;
+  reuse repositories/rates.next_change for the conflict check. Mention concurrency (two Ops users
+  POSTing at once): a unique constraint or transaction-level check would be the production answer.
+- Frontend not required; if they have time, a small form is a bonus.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/earnings/test_feature_schedule_rates.py" }]
+
+[[feature]]
+id = "tax"
+title = "Annual 1099 earnings summary"
+summary = "Give providers the yearly total Acme Health paid them, for their 1099-NEC."
+spec = '''
+**From:** Marcus (Provider Support lead)
+
+Every January we get hundreds of "what number goes on my taxes?" tickets. Acme Health sends providers a
+1099-NEC for what we paid them during the year. Let's give them the numbers ahead of time:
+
+- `GET /providers/{id}/tax-summary/{year}`
+- What they were paid for sessions, broken down by payer, plus any adjustments (back pay, stipends,
+  recoupments), and the total.
+- Tell them whether they'll get a 1099 at all (the IRS threshold is $600).
+- Show it on the dashboard if you have time.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- Response: {"provider_id", "year", "sessions_cents", "adjustments_cents", "total_cents",
+  "by_payer": [{"payer", "session_count", "amount_cents"}], "form_1099_required"}.
+- CASH BASIS: a 1099 reports what was PAID in the calendar year, so sessions count by `paid_on`, not
+  by service date. A Dec 29 2025 session paid Jan 9 2026 is in 2026. Completed sessions with no
+  paid_on yet (payout pending) are excluded. No-shows / cancelled / scheduled never count.
+  (This is the main ambiguity: a candidate who asks "by service date or by pay date?" is strong.)
+- Each session's amount is still the contracted rate in effect on its DATE OF SERVICE (the fixed
+  RateTable), not on the pay date. So that Dec 2025 session is at its 2025 rate.
+- Adjustments count by their effective_date year (they're paid on that date); negatives reduce the
+  total. adjustments_cents is their net sum.
+- total_cents = sessions_cents + adjustments_cents.
+- form_1099_required = total_cents >= 60000 (exactly $600.00 -> true; $599.99 -> false; negative ->
+  false).
+- by_payer: only payers with paid sessions in that year, sorted by amount_cents descending, then
+  payer name. Empty year -> all zeros, by_payer [], form_1099_required false (200, not 404).
+- Unknown provider -> 404. Year is a path int (2000-2100 is fine).
+- Integer cents throughout; no floats.
+- Seed: Rosa's 2026 adjustments net to $250 + $340 - $172 = $418.00.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/earnings/test_feature_tax_summary.py" }]
+
+[[feature]]
+id = "projection"
+title = "Projected earnings for the month"
+summary = "Show providers what they're on track to earn this month from booked sessions."
+spec = '''
+**From:** Priya (PM, Provider Experience)
+
+Providers keep asking "how's this month looking?". We know what they've earned so far and what's
+on their calendar, so let's project it:
+
+- `GET /providers/{id}/projection/{month}` (month like `2026-10`).
+- Earned so far, plus what the sessions they still have booked this month will pay, and the total.
+- Use the right rate for each session (heads up: some providers have a rate change coming).
+- A small "this month" line on the dashboard would be great.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- Response: {"provider_id", "month", "earned_cents", "projected_cents", "total_cents",
+  "completed_count", "scheduled_count", "undocumented_count"}.
+- earned: COMPLETED sessions in the month (any date in the month), each at its date's rate.
+- projected: SCHEDULED sessions in the month with service_date >= today (today counts: those are
+  later today), each at the rate in effect on ITS OWN date, so a rate change effective mid-month
+  applies to sessions from that date on. Use the fixed RateTable.
+- Scheduled sessions dated BEFORE today were never documented: not projected, counted in
+  undocumented_count (Support wants to nudge providers to document them).
+- no_show / cancelled: ignored entirely.
+- No discount for expected no-shows (PM: "keep it simple, maybe later").
+- total_cents = earned_cents + projected_cents.
+- A past month: projected 0 (its leftover scheduled sessions are undocumented).
+- Invalid month ("2026-13", "october") -> 422 (reuse services/months.parse_month). Unknown provider
+  -> 404.
+- "today" must come from the get_today dependency (tests freeze it). A candidate calling
+  date.today() in the service will fail the tests: good teaching moment.
+- A scheduled session with no contracted rate: not tested; raising the existing MissingRate (409)
+  like the rest of the app, or skipping it and saying so, are both fine if they explain.
+- Seed: Rosa, Oct 2026, today Oct 23: earned $1,962.00 (13 sessions), projected Oct 26 Aetna 90837
+  $172 + Oct 27 Cigna 90834 $128 + Oct 29 Aetna 90834 $136 + Oct 30 Optum 90837 $155 = $591.00,
+  total $2,553.00.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/earnings/test_feature_projection.py" }]

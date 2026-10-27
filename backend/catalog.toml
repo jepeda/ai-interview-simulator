@@ -1,0 +1,735 @@
+# Exercise catalog: drives the dashboard, the test runner, and reset.
+#
+#   files  = working copies you edit (repo-relative). Reset restores them from backend/starters.
+#   tests  = test suites the dashboard runs (runner = "pytest" | "vitest").
+#   track  = "syntax" | "debugging" | "project" | "interview" (the AI-interview simulation; its
+#            ticket, feature requests and interviewer notes live in backend/interview/*.toml)
+#   root   = folder shown in the editor's file tree. A project with `root` and no `files` treats
+#            every file under root as part of the exercise (reset restores all of them).
+#   extra_roots = more folders that belong to a `root` exercise (e.g. its frontend).
+#   quickref = docs/quickref/<name>.md pages listed first in the Quick ref panel.
+#   hints  = revealed one at a time. They nudge; they never contain the full answer.
+#            Reference solutions live separately in backend/solutions/.
+
+# ───────────────────────────── Python syntax drills ─────────────────────────────
+
+[[exercise]]
+id = "py01"
+track = "syntax"
+title = "Dictionaries"
+minutes = 8
+topics = ["dict", "get", "items", "spread"]
+quickref = ["dict"]
+files = ["backend/workspace/drills/ex01_dicts.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex01_dicts.py" }]
+requirements = '''
+Four small dict functions. The TS reflexes that break here:
+
+- `obj.missing` is `undefined` in TS, but `d["missing"]` **raises `KeyError`** in Python.
+- `Object.assign(a, b)` / `a.update(b)` **mutates**. The spread equivalent is `{**a, **b}` (or `a | b`).
+- Iterate key/value pairs with `for key, value in d.items():`.
+
+Fix `get_copay_cents`, `count_by_status` and `merge_preferences`, then implement `invert_index`.
+'''
+hints = [
+  '''`dict.get(key, default)` is the closest thing to `obj[key] ?? default`.''',
+  '''In `count_by_status`, the first time you see a status there is nothing to `+= 1`. Read the current count with a default of 0 first.''',
+  '''`merge_preferences` must build a *new* dict. Python supports a spread-like syntax with `**` inside a dict literal.''',
+  '''`invert_index` needs a loop inside a loop: outer over `.items()`, inner over each list of ids.''',
+]
+
+[[exercise]]
+id = "py02"
+track = "syntax"
+title = "Lists, tuples, slicing & unpacking"
+minutes = 10
+topics = ["list", "tuple", "slice", "enumerate", "zip", "unpacking"]
+quickref = ["list-tuple", "iteration"]
+files = ["backend/workspace/drills/ex02_lists_tuples.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex02_lists_tuples.py" }]
+requirements = '''
+Practice the list operations you'd use `slice`, `forEach((x, i) => ...)` and destructuring for in TS.
+
+- `first_and_last` — handle empty and single-item lists.
+- `chunk` — split into fixed-size pieces using slices.
+- `numbered` — use `enumerate` instead of `range(len(...))`; respect `start`.
+- `pair_up` — return `(id, name)` tuples; mismatched lengths must raise `ValueError`.
+- `split_head_tail` — star-unpacking; empty input raises `ValueError`.
+'''
+hints = [
+  '''Python indexes from 0, and `items[-1]` is the last element. Check emptiness with `if not items:`.''',
+  '''`range(start, stop, step)` gives you chunk start positions; `items[i:i + size]` never raises even past the end.''',
+  '''`enumerate(names, start=...)` yields `(index, value)` pairs that you can unpack directly in the `for`.''',
+  '''`zip` silently stops at the shorter input. Since Python 3.10 it takes a keyword that makes it strict.''',
+  '''`head, *tail = values` works like `const [head, ...tail] = values`.''',
+]
+
+[[exercise]]
+id = "py03"
+track = "syntax"
+title = "Comprehensions"
+minutes = 8
+topics = ["list comprehension", "dict comprehension", "set comprehension"]
+quickref = ["comprehensions", "dict", "set"]
+files = ["backend/workspace/drills/ex03_comprehensions.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex03_comprehensions.py" }]
+requirements = '''
+Replace `.filter().map()`, `Object.fromEntries`, `new Set` and `flatMap` with comprehensions.
+Each function should be a single `return` statement when you're done.
+
+- `active_emails` — filter by status, skip `None` emails, normalize (strip + lowercase).
+- `index_by_id` — dict comprehension.
+- `unique_payers` — set comprehension, returned as a **sorted list**.
+- `flatten_diagnoses` — nested comprehension.
+'''
+hints = [
+  '''Shape: `[expression for item in items if condition]`. The condition can use `and`.''',
+  '''Dict comprehension: `{key_expr: value_expr for item in items}`.''',
+  '''A set comprehension uses `{}` with no colon. `sorted(...)` accepts any iterable and returns a list.''',
+  '''Nested comprehension `for` clauses read in the same order as nested `for` loops: outer first.''',
+]
+
+[[exercise]]
+id = "py04"
+track = "syntax"
+title = "collections: defaultdict, Counter, sets"
+minutes = 8
+topics = ["defaultdict", "Counter", "set operations"]
+quickref = ["collections", "set", "dict"]
+files = ["backend/workspace/drills/ex04_collections.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex04_collections.py" }]
+requirements = '''
+The standard library replaces a lot of hand-written reduce() code.
+
+- `group_by_provider` — use `defaultdict(list)`, but return a plain `dict`.
+- `top_diagnoses` — n most common codes, ties in first-seen order.
+- `missing_fields` — a field is missing if absent **or** `None` (but `0` and `""` are present!).
+- `shared_patients` — intersection, sorted, no duplicates.
+'''
+hints = [
+  '''Indexing a `defaultdict(list)` with a new key creates an empty list for you. `dict(some_defaultdict)` converts it.''',
+  '''`Counter` has a method that does exactly what `top_diagnoses` describes, including tie order.''',
+  '''`record.keys()` behaves like a set, but it can't see `None` values. Check each required name with `.get(...) is None`.''',
+  '''`set(a) & set(b)` is the intersection.''',
+]
+
+[[exercise]]
+id = "py05"
+track = "syntax"
+title = "Functions & type hints"
+minutes = 10
+topics = ["default args", "keyword-only", "*args", "**kwargs", "type hints"]
+quickref = ["functions", "typing"]
+files = ["backend/workspace/drills/ex05_functions.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex05_functions.py" }]
+requirements = '''
+Python function signatures are more expressive than TS ones and have one famous trap.
+
+- `add_tag` — has the **mutable default argument** bug. Fix it and don't mutate the caller's list.
+- `format_name` — make `middle` and `last_first` keyword-only; implement the formatting.
+- `total_cents` — variadic `*amounts` plus a keyword option.
+- `build_query` — arbitrary `**params`, skipping `None`.
+'''
+hints = [
+  '''A default like `= []` is created once, when `def` runs, and then shared by every call. The idiom is a `None` default.''',
+  '''A bare `*` in a parameter list makes every parameter after it keyword-only.''',
+  '''`*amounts` arrives as a tuple, so `sum(amounts)` works. A 10% discount means multiplying by 0.9.''',
+  '''`**params` arrives as a dict that preserves argument order. Build `key=value` strings, then `"&".join(...)`.''',
+]
+
+[[exercise]]
+id = "py06"
+track = "syntax"
+title = "None handling & truthiness"
+minutes = 8
+topics = ["None", "Optional", "truthiness", "is None"]
+quickref = ["none-truthiness", "typing"]
+files = ["backend/workspace/drills/ex06_none_handling.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex06_none_handling.py" }]
+requirements = '''
+There's no `??` or `?.` in Python, and `0`, `""`, `[]` and `{}` are all falsy.
+These bugs are common in real code reviews.
+
+- `display_copay` — `$0.00` is a valid copay. Format with thousands separators.
+- `primary_phone` — safely walk a nested structure where any level may be missing or `None`.
+- `first_present` — `""` counts as present; only `None` is skipped.
+- `member_id_or_self_pay` — strip, and fall back on missing, `None` or blank.
+'''
+hints = [
+  '''`if not x` is true for `0`. When you mean "is it None", write `if x is None`.''',
+  '''f-string format spec: `f"{value:,.2f}"` gives thousands separators and 2 decimals.''',
+  '''For nested lookups, `d.get("k") or {}` gives you something safe to keep calling `.get` on.''',
+  '''A function that falls off the end returns `None` implicitly. `next(generator, default)` is a neat way to find the first match.''',
+]
+
+[[exercise]]
+id = "py07"
+track = "syntax"
+title = "Strings & f-strings"
+minutes = 8
+topics = ["str methods", "f-strings", "format spec", "join/split"]
+quickref = ["str"]
+files = ["backend/workspace/drills/ex07_strings.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex07_strings.py" }]
+requirements = '''
+String formatting comes up constantly in interviews.
+
+- `format_member_id` — normalize, then group into 3-character chunks joined by `-`.
+- `initials` — handle repeated whitespace.
+- `format_money` — negative values render as `-$12.50`, not `$-12.50`.
+- `mrn` — zero-pad to 6 digits.
+'''
+hints = [
+  '''`str.replace` can be chained. Chunking a string works exactly like chunking a list (see py02).''',
+  '''`s.split()` with **no argument** splits on runs of whitespace and drops empty strings.''',
+  '''Format the absolute value with `:,.2f`, then put the sign in front of the `$` yourself.''',
+  '''Format spec `06d` means: integer, padded with zeros to width 6.''',
+]
+
+[[exercise]]
+id = "py08"
+track = "syntax"
+title = "Sorting"
+minutes = 10
+topics = ["sorted", "key functions", "tuple keys", "None ordering"]
+quickref = ["sorting", "none-truthiness"]
+files = ["backend/workspace/drills/ex08_sorting.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex08_sorting.py" }]
+requirements = '''
+Python sorts with key functions instead of comparators.
+
+- `sort_by_name` — case-insensitive, last then first, **without mutating** the input.
+- `newest_first` — sort datetimes descending.
+- `by_termination_date` — `None` sorts last. (Comparing `None < date` raises `TypeError`!)
+- `rank_providers` — rating descending, then name ascending.
+'''
+hints = [
+  '''`list.sort()` sorts in place and returns `None`. `sorted()` returns a new list.''',
+  '''A key can return a tuple. Tuples compare element by element, like a multi-column ORDER BY.''',
+  '''For None-last, make the first tuple element a boolean: `False` sorts before `True`. The second element must never be `None`.''',
+  '''You can't use `reverse=True` for only one column. Negate the number instead.''',
+]
+
+[[exercise]]
+id = "py09"
+track = "syntax"
+title = "Filtering, any/all/next, generators"
+minutes = 8
+topics = ["any", "all", "next", "generator expressions", "sum"]
+quickref = ["iteration", "comprehensions"]
+files = ["backend/workspace/drills/ex09_filtering.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex09_filtering.py" }]
+requirements = '''
+The equivalents of `find`, `some`, `every` and `filter().reduce()`.
+
+- `find_patient` — return the first match or `None` (currently raises `IndexError`).
+- `all_claims_verified` / `has_overdue_invoice` — use `all` / `any`.
+- `billable_minutes` — has an **operator precedence** bug. Rewrite it as `sum(...)` over a generator.
+'''
+hints = [
+  '''`next(iterator, default)` returns the default instead of raising when the iterator is empty.''',
+  '''`any(...)` and `all(...)` take a generator expression directly. No extra brackets are needed.''',
+  '''`and` binds tighter than `or`, so `a or b and c` means `a or (b and c)`. Re-read the spec: all three conditions must hold.''',
+]
+
+[[exercise]]
+id = "py10"
+track = "syntax"
+title = "Exceptions"
+minutes = 12
+topics = ["try/except", "raise from", "custom exceptions", "Decimal"]
+quickref = ["exceptions"]
+files = ["backend/workspace/drills/ex10_exceptions.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex10_exceptions.py" }]
+requirements = '''
+Parse and validate input, translate low-level errors into domain errors, and keep a batch
+going when individual items fail.
+
+- `parse_copay` — strict money parsing. Reject blank, non-numeric, negative and >2 decimal input with `ValueError`.
+- `safe_parse_copay` — return `None` on bad input.
+- `load_patient` — raise `PatientNotFoundError` **chained** from the `KeyError`.
+- `parse_batch` — collect successes and error messages.
+'''
+hints = [
+  '''Use `Decimal`, not `float`, for money. `str.removeprefix("$")` and `.replace(",", "")` clean the input.''',
+  '''`Decimal("abc")` raises `decimal.InvalidOperation`. Catch it and re-raise a `ValueError` that includes the original input. `{raw!r}` in an f-string shows quotes.''',
+  '''A Decimal's decimal places: `amount.as_tuple().exponent` is -2 for "1.25" and -3 for "1.255".''',
+  '''`raise NewError(...) from err` inside an `except KeyError as err:` block sets `__cause__`.''',
+]
+
+[[exercise]]
+id = "py11"
+track = "syntax"
+title = "Custom exceptions & context managers"
+minutes = 12
+topics = ["exception hierarchy", "super().__init__", "with", "@contextmanager", "__enter__/__exit__"]
+quickref = ["exceptions", "context-managers", "classes"]
+files = ["backend/workspace/drills/ex11_context_managers.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex11_context_managers.py" }]
+requirements = '''
+`with` blocks are everywhere in Python: DB sessions, files, locks, transactions.
+
+- `EligibilityError` — subclass `ClinicError`, store attributes, produce the specified message.
+- `require_eligible` — raise it.
+- `audit` — a generator-based context manager that records success **or** failure and re-raises.
+- `StagedChanges` — a class-based context manager that only applies changes when the block succeeds.
+'''
+hints = [
+  '''Call `super().__init__(message)` so `str(err)` works, then set your own attributes.''',
+  '''Inside an `@contextmanager` function, wrap the `yield` in `try/except`. After recording the error, use a bare `raise` to re-raise it.''',
+  '''`__enter__`'s return value is what `as staged` binds to. Which list should the caller append to?''',
+  '''`__exit__` returning a truthy value **swallows** the exception. `exc_type is None` means the block succeeded.''',
+]
+
+[[exercise]]
+id = "py12"
+track = "syntax"
+title = "Classes & dunder methods"
+minutes = 12
+topics = ["__init__", "self", "@property", "@classmethod", "__eq__", "__repr__", "__add__"]
+quickref = ["classes"]
+files = ["backend/workspace/drills/ex12_classes.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex12_classes.py" }]
+requirements = '''
+Build a small value object (`Money`) and fix a `Patient` class with classic TS-to-Python mistakes.
+
+- `Money` — type-check the constructor, `+` returns `Money`, value equality, `repr` and `str`, and a `from_dollars` **classmethod** without float rounding errors.
+- `Patient.full_name` — a property, and it's currently missing something every method needs.
+- `Patient.age_on` — account for whether the birthday has happened yet this year.
+'''
+hints = [
+  '''Every instance method's first parameter is `self`. `@property` lets callers write `p.full_name` with no parentheses.''',
+  '''Without `__eq__`, `==` compares identity (like `===` on objects). Return `NotImplemented` (not `False`) for foreign types.''',
+  '''`isinstance(True, int)` is `True`: bool is a subclass of int.''',
+  '''`float("0.29") * 100` is 28.999…. Go through `Decimal(str(dollars))`.''',
+  '''Tuples compare lexicographically: `(on.month, on.day) >= (dob.month, dob.day)`.''',
+]
+
+[[exercise]]
+id = "py13"
+track = "syntax"
+title = "Dataclasses & enums"
+minutes = 10
+topics = ["@dataclass", "field(default_factory)", "frozen", "__post_init__", "replace", "StrEnum"]
+quickref = ["dataclasses-enums", "classes"]
+files = ["backend/workspace/drills/ex13_dataclasses.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex13_dataclasses.py" }]
+requirements = '''
+Right now the module doesn't even import. Read the error message first.
+
+- `Appointment` — safe mutable default, `status` defaults to the enum, `ends_at` is a property.
+- `PlanKey` — immutable and hashable.
+- `Claim` — validate in `__post_init__`; `status` is not a constructor argument.
+- `cancel` — return a modified **copy**.
+'''
+hints = [
+  '''Run the tests and read the `ValueError` from `dataclasses`. It tells you exactly which helper to use.''',
+  '''`@dataclass(frozen=True)` makes instances immutable *and* generates `__hash__`.''',
+  '''`field(default=..., init=False)` keeps a field out of `__init__`.''',
+  '''`dataclasses.replace(obj, **changes)` is the `{ ...obj, status }` equivalent.''',
+]
+
+[[exercise]]
+id = "py14"
+track = "syntax"
+title = "async/await basics"
+minutes = 10
+topics = ["async def", "await", "asyncio.gather", "asyncio.run"]
+quickref = ["async"]
+files = ["backend/workspace/drills/ex14_async_basics.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex14_async_basics.py" }]
+requirements = '''
+Python async works like JS Promises, with two differences: un-awaited coroutines never start,
+and sync code needs `asyncio.run()` to start the event loop.
+
+- `is_eligible` — has a missing-`await` bug.
+- `check_many` — currently sequential. Make it concurrent (the test checks max in-flight requests).
+- `check_many_sync` — call it from synchronous code.
+'''
+hints = [
+  '''"'coroutine' object is not subscriptable" means you're holding the un-awaited call, like using a Promise as if it were the value.''',
+  '''`asyncio.gather(*coros)` is `Promise.all`. Note the `*`: it takes separate arguments, not a list.''',
+  '''gather returns results in argument order, so you can `zip` them back to the ids.''',
+]
+
+[[exercise]]
+id = "py15"
+track = "syntax"
+title = "Async patterns: timeouts, allSettled, limits"
+minutes = 15
+topics = ["asyncio.timeout", "return_exceptions", "Semaphore"]
+quickref = ["async", "exceptions"]
+files = ["backend/workspace/drills/ex15_async_patterns.py"]
+tests = [{ runner = "pytest", path = "backend/tests/drills/test_ex15_async_patterns.py" }]
+requirements = '''
+Three production patterns for calling flaky third-party APIs (like a payer's eligibility API).
+
+- `fetch_with_timeout` — give up after `seconds`, return `None`.
+- `fetch_all_settled` — like `Promise.allSettled`: one failure must not lose the other results.
+- `fetch_limited` — like `p-limit`: at most `limit` concurrent requests, results in input order.
+'''
+hints = [
+  '''Python 3.11+: `async with asyncio.timeout(seconds):` raises the builtin `TimeoutError` when it expires.''',
+  '''`gather(..., return_exceptions=True)` puts exception objects in the result list. Check with `isinstance(result, Exception)`.''',
+  '''Create one `asyncio.Semaphore(limit)`, wrap each fetch in a small inner `async def` that does `async with sem:`, then gather those.''',
+]
+
+# ───────────────────────────── Clinic debugging challenges ─────────────────────────────
+
+[[exercise]]
+id = "dbg1"
+track = "debugging"
+root = "backend/workspace/clinic"
+title = "Incorrect insurance eligibility status"
+minutes = 12
+topics = ["business rules", "date comparison", "None"]
+quickref = ["datetime", "none-truthiness", "dataclasses-enums"]
+files = ["backend/workspace/clinic/services/eligibility.py"]
+tests = [{ runner = "pytest", path = "backend/tests/clinic/test_d1_eligibility.py" }]
+requirements = '''
+**Support ticket #4821 (Billing)**
+
+> Front desk reports that patients with active Aetna coverage show **Terminated** in the
+> eligibility panel, so they're being asked to pay out of pocket. Also, a Blue Cross patient
+> whose plan ends *today* was turned away, but today should still be covered. And a patient
+> with a plan but **no member id on file** shows as eligible, then claims get rejected.
+
+The spec is in the module docstring of `services/eligibility.py`. The endpoint is
+`GET /patients/{id}/eligibility?on=YYYY-MM-DD`.
+
+To reproduce in the app, open the **Clinic App** tab. Ada King (Aetna, open-ended),
+Ben Okafor (BCBS, ends today) and Farah Haddad (no member id) are good examples.
+Swagger UI is at http://127.0.0.1:8711/docs.
+'''
+hints = [
+  '''Line up each rule in the docstring against the code. One rule is only half-implemented.''',
+  '''What happens on the open-ended branch, where `termination_date is None`?''',
+  '''"Last covered day (inclusive)": on the termination date itself, should the comparison be true or false?''',
+]
+
+[[exercise]]
+id = "dbg2"
+track = "debugging"
+root = "backend/workspace/clinic"
+title = "Missing patient records"
+minutes = 15
+topics = ["SQLAlchemy", "joins", "SQL NULL semantics"]
+quickref = ["sqlalchemy"]
+files = ["backend/workspace/clinic/repository.py"]
+tests = [{ runner = "pytest", path = "backend/tests/clinic/test_d2_missing_patients.py" }]
+requirements = '''
+**Support ticket #4830 (Front desk)**
+
+> The patient list is missing people. Self-pay patients never show up, and a bunch of
+> long-time patients we migrated from the old system disappeared too. Searching by id
+> (`GET /patients/{id}`) finds them fine.
+
+The list endpoint is `GET /patients` and the query lives in `repository.list_patients`.
+Make every non-archived patient appear, keep the payer filter and pagination working,
+and keep `total` accurate.
+
+Tip: to see the generated SQL, `print(stmt)` inside the function, or set `echo=True` on the engine in `db.py`.
+'''
+hints = [
+  '''There are two independent causes. One drops self-pay patients, and the other drops legacy patients.''',
+  '''What kind of JOIN does `select(...).join(...)` produce, and what happens to rows with no match?''',
+  '''In SQL, `NULL != 'archived'` evaluates to NULL, not TRUE, and WHERE drops it. How does the model describe legacy rows?''',
+  '''SQLAlchemy has `.outerjoin(...)`, `column.is_(None)` and `or_(...)`.''',
+]
+
+[[exercise]]
+id = "dbg3"
+track = "debugging"
+root = "backend/workspace/clinic"
+title = "Incorrect appointment date sorting"
+minutes = 10
+topics = ["sorting", "datetime vs string", "filtering"]
+quickref = ["sorting", "datetime"]
+files = ["backend/workspace/clinic/services/appointments.py"]
+tests = [{ runner = "pytest", path = "backend/tests/clinic/test_d3_appointment_sorting.py" }]
+requirements = '''
+**Support ticket #4835 (Providers)**
+
+> On the patient page, "Upcoming appointments" are in a weird order: January shows before
+> December, and a 2 PM session shows before a 9 AM one on the same day. Cancelled
+> sessions also show up as upcoming. "Past" is jumbled across years.
+
+Endpoint: `GET /patients/{id}/appointments` (optional `?now=` for reproducible results).
+Look at Ada King in the Clinic App tab.
+'''
+hints = [
+  '''What type is the sort key, and what does sorting that type compare?''',
+  '''`"01/05/2027" < "12/01/2026"` is True, because strings compare character by character.''',
+  '''Sort on the real `datetime` (`starts_at`). Keep `display_time` for display only. Then re-read the docstring on `upcoming_appointments`.''',
+]
+
+[[exercise]]
+id = "dbg4"
+track = "debugging"
+root = "backend/workspace/clinic"
+title = "API validation errors (422 vs 500)"
+minutes = 15
+topics = ["Pydantic v2", "field_validator", "model_validator", "Optional"]
+quickref = ["pydantic", "fastapi", "none-truthiness"]
+files = ["backend/workspace/clinic/schemas.py"]
+tests = [{ runner = "pytest", path = "backend/tests/clinic/test_d4_validation.py" }]
+requirements = '''
+**Support ticket #4841 (Intake form)**
+
+> Creating a self-pay patient fails with 422 "member_id: Field required". Creating an
+> insured patient returns a **500 Internal Server Error** (the logs say something about
+> SQLite Date). A typo'd birthday like `2090-01-01` was accepted on a different form.
+
+Fix `PatientCreate` in `schemas.py` so it meets every requirement in its docstring. Invalid
+input must be a **422** with the offending field in `detail[].loc`, never a 500.
+Don't change the router, because the schema is the contract.
+
+Try it in Swagger (http://127.0.0.1:8711/docs) or with the "New patient" form in the Clinic App tab.
+'''
+hints = [
+  '''Pydantic only validates what the type annotation says. What type is `date_of_birth` declared as, and what does the ORM column need?''',
+  '''An optional field needs both `| None` and a default `= None`.''',
+  '''`Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]` covers trim and non-blank. `StringConstraints` also supports `to_lower` and `pattern`.''',
+  '''Single-field rules go in `@field_validator("field")` with `@classmethod`. Rules spanning fields go in `@model_validator(mode="after")`, which returns `self`. Raise `ValueError` to produce a 422.''',
+]
+
+[[exercise]]
+id = "dbg5"
+track = "debugging"
+root = "backend/workspace/clinic"
+title = "Stale frontend data after an API update"
+minutes = 15
+topics = ["cache invalidation", "React state immutability", "fullstack"]
+quickref = ["fastapi", "dict"]
+files = [
+  "backend/workspace/clinic/routers/patients.py",
+  "frontend/src/clinic/patientState.ts",
+]
+tests = [
+  { runner = "pytest", path = "backend/tests/clinic/test_d5_stale_data.py" },
+  { runner = "vitest", path = "frontend/tests/patientState.test.ts" },
+]
+requirements = '''
+**Support ticket #4850 (Front desk)**
+
+> I changed a patient's insurance from Aetna to Cigna and hit Save. The success toast
+> appeared, but the patient list still says Aetna, and the detail panel shows Aetna even
+> after I click the patient again. A hard refresh fixes the list but **not** the detail panel.
+> Removing coverage entirely also leaves the old plan on screen.
+
+There are **two** bugs, one on each side of the API:
+
+1. **Backend:** `PATCH /patients/{id}/coverage` writes to the DB, but the response and later
+   `GET /patients/{id}` calls still return old data.
+2. **Frontend:** `applyPatientUpdate` (used in `setPatients(prev => ...)`) doesn't make
+   React re-render the list, and it ignores `null` fields.
+
+Reproduce in the Clinic App tab with "Edit coverage". Both test suites must pass.
+'''
+hints = [
+  '''Backend: `get_patient` reads through `services/patient_cache.py`. Read that module's functions. Which one does nothing call?''',
+  '''Frontend: React's `useState` compares the old and new state by reference (`Object.is`). What reference does the function return?''',
+  '''Frontend: `if (value)` skips `null`, so clearing a plan never clears it. Prefer building new objects (`map` + spread) over mutating.''',
+]
+
+# ───────────────────────────── Project (interview-style, multi-part) ─────────────────────────────
+
+[[exercise]]
+id = "proj1"
+track = "project"
+title = "Telehealth booking service (4 parts)"
+minutes = 75
+topics = ["unfamiliar codebase", "timezones", "SQLAlchemy", "idempotency", "domain errors", "business rules"]
+quickref = ["datetime", "sqlalchemy", "fastapi", "pydantic", "exceptions", "sorting"]
+root = "backend/workspace/booking"
+tests = [
+  { runner = "pytest", path = "backend/tests/booking/test_p1_availability.py" },
+  { runner = "pytest", path = "backend/tests/booking/test_p2_matching.py" },
+  { runner = "pytest", path = "backend/tests/booking/test_p3_booking.py" },
+  { runner = "pytest", path = "backend/tests/booking/test_p4_cancellation.py" },
+]
+requirements = '''
+**Format:** this mirrors the longer interview rounds (CodePair-style, often with an AI assistant allowed),
+where you get a small, realistic codebase and 60–90 minutes to debug and extend it. The skill being
+tested is **navigating unfamiliar code and following its conventions**, not memorized syntax.
+
+Patients use this service to find an in-network therapist and book a telehealth session. Start with
+**`README.md`** in the file tree. It has the codebase tour and the conventions reviewers will check.
+
+| Part | Task | ~Time |
+|---|---|---|
+| 1 | **Debug** `services/availability.py`: slots show at 4am, overlap existing sessions, never free up after a cancellation, and vanish across timezones | 20 min |
+| 2 | **Implement** `services/matching.py`: provider search by state license (with expiry), payer, specialty; no duplicate rows; ranking; pagination | 20 min |
+| 3 | **Implement** `book_appointment`: validations, 409 on a taken slot, idempotency keys | 20 min |
+| 4 | **Implement** `cancel_appointment`: state rules and the late-cancel fee | 15 min |
+
+Parts build on each other (booking reuses the slot engine), so go in order. The results below are
+grouped by part.
+
+**How to work it like the real thing**
+
+- Spend the first 5 minutes reading: README → `timeutil.py` → `errors.py` → the function you're changing.
+- Use **F12 / Cmd+click** to jump to definitions across files, and the tree's filter box to find files.
+- Read the failing test's name and assertion before reading the code. Tests encode the spec.
+- Talk through trade-offs out loud (SQL vs Python filtering, where validation belongs, why idempotency matters).
+- Swagger for the running service: http://127.0.0.1:8712/docs
+- If AI help is allowed in your interview, practice using it the way interviewers like: small, specific
+  prompts, then *verify* the output against the tests and conventions. Don't paste whole files.
+'''
+hints = [
+  '''Part 1: `datetime.combine(day, t, tzinfo=UTC)` builds 09:00 **UTC**. Which timezone are the availability windows in? `timeutil.zone()` gets it.''',
+  '''Part 1: "booked" is currently *same start time*. Two intervals overlap when `a_start < b_end and b_start < a_end`. And should a cancelled appointment block anything?''',
+  '''Part 1: a viewer's calendar day can contain slots from the provider's previous **or next** local day. Loop over neighbouring provider days, then keep slots whose start falls on `day` once converted to `tz`.''',
+  '''Part 2: a JOIN to licenses/payers/specialties returns one row per match, which is where duplicates come from. SQLAlchemy's `Provider.licenses.any(...)` compiles to `EXISTS (...)` and avoids them. (Filtering in Python is also acceptable if you can defend it.)''',
+  '''Part 2: case-insensitive matching uses `func.lower(column) == value.lower()`. For NULL ratings last, ordering by `Provider.rating.is_(None)` first puts rated providers (False) first.''',
+  '''Part 3: do the idempotency lookup **first** (`repositories/appointments.get_by_idempotency_key`). Compare instants with aware datetimes: `from_db(existing.starts_at) == request.starts_at`.''',
+  '''Part 3: validate the slot by calling `open_slots(provider, local_day, provider_tz, appointments, now)` and checking membership. Get `appointments` from `list_for_provider` with a range of a couple of days around `starts_at` (converted with `to_db`).''',
+  '''Part 4: `starts_at - now` is a `timedelta`, so compare it to `LATE_CANCEL_WINDOW` with `<` (exactly 24h is not late). Half of an odd cent amount, rounded up, is `(rate + 1) // 2`.''',
+]
+
+# ───────────────────────────── AI interview (60-minute simulation) ─────────────────────────────
+
+[[exercise]]
+id = "ai0"
+track = "interview"
+title = "Sandbox: try the interview screen (15 min, not counted)"
+minutes = 15
+topics = ["demo", "full stack", "AI assistant"]
+quickref = ["fastapi"]
+root = "backend/workspace/sandbox"
+extra_roots = ["frontend/src/sandbox"]
+tests = [
+  { runner = "pytest", path = "backend/tests/sandbox/test_bug_week.py" },
+  { runner = "vitest", path = "frontend/tests/sandbox/format.test.ts" },
+]
+requirements = '''
+**Sandbox.** A tiny version of the mock AI interview for trying out (or showing off) the screen. It
+works exactly like the real scenarios, but it's short and isn't counted in **Your attempts**.
+
+- Read the ticket, then `README.md`. The card is at http://127.0.0.1:5173/sandbox.html and Swagger
+  at http://127.0.0.1:8716/docs.
+'''
+hints = [
+  '''Which statuses pay what? The README's cheat sheet has the rules; compare them with services/earnings.py.''',
+  '''The total is right but displayed wrong too: look at formatCents in format.ts.''',
+]
+
+[[exercise]]
+id = "ai1"
+track = "interview"
+title = "AI interview: provider payouts (60 min)"
+minutes = 60
+topics = ["full stack", "unfamiliar codebase", "timezones", "money in cents", "FastAPI", "React + TS", "AI assistant"]
+quickref = ["datetime", "fastapi", "sqlalchemy", "pydantic"]
+root = "backend/workspace/payouts"
+extra_roots = ["frontend/src/payouts"]
+tests = [
+  { runner = "pytest", path = "backend/tests/payouts/test_bug_pay_periods.py" },
+  { runner = "vitest", path = "frontend/tests/payouts/format.test.ts" },
+]
+requirements = '''
+**Format:** a simulation of the 60-minute AI coding interview. You work in a browser IDE on an
+existing full-stack app (FastAPI + React/TypeScript) with an **AI assistant built in**. First you
+debug a **user-reported error**; once its tests pass you **pick one of three feature requests**.
+
+- Start with the support ticket, then **`README.md`** in the file tree (codebase tour + domain cheat sheet).
+- Reproduce it first: the provider portal is at http://127.0.0.1:5173/payouts.html and Swagger at
+  http://127.0.0.1:8713/docs.
+- Think out loud, ask the interviewer about the domain, and use the AI assistant like you would at work:
+  then *verify* what it gives you against the tests and the data.
+'''
+hints = [
+  '''Compare what the portal shows with what the API returns for the same statement (Swagger). That tells you which layer(s) are wrong.''',
+  '''Look at the session that "moved" in the ticket: when did it start in UTC, and what day was it on the provider's calendar? Then read the README's "Pay periods" section.''',
+  '''Follow how a statement picks its appointments (services/statements.py → services/periods.py), and how the portal turns "2026-10-01" into text (format.ts).''',
+]
+
+[[exercise]]
+id = "ai2"
+track = "interview"
+title = "AI interview #2: claims & remits (60 min)"
+minutes = 60
+topics = ["full stack", "unfamiliar codebase", "idempotency", "money in cents", "Decimal vs float", "FastAPI", "React + TS", "AI assistant"]
+quickref = ["fastapi", "sqlalchemy", "pydantic", "exceptions"]
+root = "backend/workspace/remits"
+extra_roots = ["frontend/src/remits"]
+tests = [
+  { runner = "pytest", path = "backend/tests/remits/test_bug_remit_posting.py" },
+  { runner = "vitest", path = "frontend/tests/remits/format.test.ts" },
+]
+requirements = '''
+**Format:** a simulation of the 60-minute AI coding interview. You work in a browser IDE on an
+existing full-stack app (FastAPI + React/TypeScript) with an **AI assistant built in**. First you
+debug a **user-reported error**; once its tests pass you **pick one of three feature requests**.
+
+- Start with the support ticket, then **`README.md`** in the file tree (codebase tour + a cheat sheet
+  for ERAs, adjustment codes and balancing).
+- Reproduce it first: the claims portal is at http://127.0.0.1:5173/remits.html and Swagger at
+  http://127.0.0.1:8714/docs.
+- The demo data is written by replaying the ERA files through the posting code, so after a backend
+  fix click **⟲ Reset demo data** in the App tab (the API reseeds with your code) to see the result.
+- Think out loud, ask the interviewer about the domain, and use the AI assistant like you would at work:
+  then *verify* what it gives you against the tests and the data.
+'''
+hints = [
+  '''Compare the portal with the API for the same claim (GET /claims/HW-1042) and the list of remittances (GET /remittances). Which numbers are already wrong in the API, and which only on screen?''',
+  '''Two remittances with the same payer and trace number: follow a POST /remittances through services/posting.py. What would stop the same file from being posted twice? What does the existing duplicate check actually compare?''',
+  '''For the penny: what is 137.17 * 100 in Python, and what does int() do with it (money.py)? For the ($43.15): what is Math.floor(-42.15) in JavaScript (format.ts)?''',
+]
+
+[[exercise]]
+id = "ai3"
+track = "interview"
+title = "AI interview #3: rates & earnings (60 min)"
+minutes = 60
+topics = ["full stack", "unfamiliar codebase", "effective dating", "audit trails", "money in cents", "FastAPI", "React + TS", "AI assistant"]
+quickref = ["sorting", "datetime", "fastapi", "sqlalchemy", "pydantic"]
+root = "backend/workspace/earnings"
+extra_roots = ["frontend/src/earnings"]
+tests = [
+  { runner = "pytest", path = "backend/tests/earnings/test_bug_rate_lookup.py" },
+  { runner = "vitest", path = "frontend/tests/earnings/chart.test.ts" },
+]
+requirements = '''
+**Format:** a simulation of the 60-minute AI coding interview. You work in a browser IDE on an
+existing full-stack app (FastAPI + React/TypeScript) with an **AI assistant built in**. First you
+debug a **user-reported error**; once its tests pass you **pick one of three feature requests**.
+
+- Start with the support ticket, then **`README.md`** in the file tree (codebase tour + the rate policy).
+- Reproduce it first: the earnings dashboard is at http://127.0.0.1:5173/earnings.html and Swagger at
+  http://127.0.0.1:8715/docs.
+- Think out loud, ask the interviewer about the domain, and use the AI assistant like you would at work:
+  then *verify* what it gives you against the tests and the data.
+'''
+hints = [
+  '''Compare three answers to "what does Rosa's Aetna 60-minute session in July pay?": the rate card (GET /providers/1/rate-card), the month detail (GET /providers/1/earnings/2026-07) and her fee-schedule history (GET /providers/1/rates). Which ones disagree, and why only that payer and code?''',
+  '''Read the README's "Rates" section, then follow how earnings pick a rate (services/earnings.py → services/rates.py). What order does the RateTable receive the entries in, and what does it assume about that order? Who else uses that same repository function?''',
+  '''For the chart: compare the `months` array from GET /providers/1/earnings?year=2026 with the twelve bars. How does chart.ts decide which month's numbers go on which bar?''',
+]
+
+[[exercise]]
+id = "ai4"
+track = "interview"
+title = "Warmup: patient balances (30 min)"
+minutes = 30
+topics = ["full stack", "money in cents", "rounding", "sorting", "AI assistant"]
+quickref = ["fastapi"]
+root = "backend/workspace/warmup"
+extra_roots = ["frontend/src/warmup"]
+tests = [
+  { runner = "pytest", path = "backend/tests/warmup/test_bug_balances.py" },
+  { runner = "vitest", path = "frontend/tests/warmup/balances.test.ts" },
+]
+requirements = '''
+**30-minute warmup** of the AI coding interview: a user-reported bug in a small full-stack app
+(FastAPI + React/TypeScript) with the AI assistant built in, then one quick feature request.
+
+- Read the ticket, then **`README.md`** (the billing rules are in it).
+- Reproduce first: the billing page is at http://127.0.0.1:5173/warmup.html and Swagger at
+  http://127.0.0.1:8717/docs.
+- Think out loud, ask the interviewer, use the AI, and verify with the tests.
+'''
+hints = [
+  '''Compute one coinsurance balance by hand (20% of $133.33) and compare it with the API. What does the README say about half cents?''',
+  '''The list order is decided in the frontend. What is it actually comparing?''',
+]

@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Your working copies of the exercises (recreated from backend/starters by setup / reset)
+backend/workspace/
+frontend/src/clinic/patientState.ts
+frontend/src/payouts/
+frontend/src/remits/
+frontend/src/earnings/
+frontend/src/sandbox/
+frontend/src/warmup/
+
+# Local databases (progress + clinic demo data)
+backend/data/
+
+.DS_Store

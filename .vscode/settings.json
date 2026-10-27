@@ -1,0 +1,29 @@
+{
+  // The Python extension auto-detects ./.venv (created by `uv sync`). If it doesn't:
+  // Ctrl+Shift+P → "Python: Select Interpreter" → pick .venv.
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": ["backend", "backend/workspace"],
+  "python.analysis.typeCheckingMode": "basic",
+
+  // Testing panel (beaker icon): run or DEBUG individual tests with breakpoints.
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["backend/tests"],
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": false,
+    "editor.rulers": [100]
+  },
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.venv": true,
+    "backend/solutions": true
+  }
+}

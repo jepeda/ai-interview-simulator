@@ -1,0 +1,26 @@
+{
+  "name": "interview-trainer",
+  "private": true,
+  "scripts": {
+    "setup": "uv sync && npm install --prefix frontend && uv run python scripts/workspace.py init",
+    "dev": "concurrently -k -n trainer,clinic,booking,payouts,remits,earnings,sandbox,warmup,web -c blue,magenta,yellow,cyan,red,white,gray,yellowBright,green \"npm:dev:trainer\" \"npm:dev:clinic\" \"npm:dev:booking\" \"npm:dev:payouts\" \"npm:dev:remits\" \"npm:dev:earnings\" \"npm:dev:sandbox\" \"npm:dev:warmup\" \"npm:dev:web\"",
+    "dev:no-clinic": "concurrently -k -n trainer,booking,payouts,remits,earnings,sandbox,warmup,web -c blue,yellow,cyan,red,white,gray,yellowBright,green \"npm:dev:trainer\" \"npm:dev:booking\" \"npm:dev:payouts\" \"npm:dev:remits\" \"npm:dev:earnings\" \"npm:dev:sandbox\" \"npm:dev:warmup\" \"npm:dev:web\"",
+    "dev:trainer": "uv run uvicorn trainer.main:app --app-dir backend --host 127.0.0.1 --port 8710 --reload --reload-dir backend/trainer",
+    "dev:clinic": "uv run uvicorn clinic.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8711 --reload --reload-dir backend/workspace/clinic",
+    "dev:booking": "uv run uvicorn booking.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8712 --reload --reload-dir backend/workspace/booking",
+    "dev:payouts": "uv run uvicorn payouts.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8713 --reload --reload-dir backend/workspace/payouts",
+    "dev:remits": "uv run uvicorn remits.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8714 --reload --reload-dir backend/workspace/remits",
+    "dev:earnings": "uv run uvicorn earnings.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8715 --reload --reload-dir backend/workspace/earnings",
+    "dev:sandbox": "uv run uvicorn sandbox.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8716 --reload --reload-dir backend/workspace/sandbox",
+    "dev:warmup": "uv run uvicorn warmup.main:app --app-dir backend/workspace --host 127.0.0.1 --port 8717 --reload --reload-dir backend/workspace/warmup",
+    "dev:web": "npm run dev --prefix frontend",
+    "test": "uv run pytest --continue-on-collection-errors",
+    "test:web": "npm test --prefix frontend",
+    "reset": "uv run python scripts/workspace.py reset",
+    "status": "uv run python scripts/workspace.py status",
+    "verify": "uv run python scripts/verify_solutions.py"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

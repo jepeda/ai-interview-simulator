@@ -1,0 +1,93 @@
+{
+  // Breakpoints work in all of these. For the Clinic API: stop the normal clinic server first
+  // (run `npm run dev:no-clinic` instead of `npm run dev`) so port 8711 is free.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Clinic API (debug, port 8711)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["clinic.main:app", "--app-dir", "backend/workspace", "--host", "127.0.0.1", "--port", "8711"],
+      "cwd": "${workspaceFolder}",
+      "jinja": true,
+      "justMyCode": true
+    },
+    {
+      "name": "Booking API (debug, port 8712)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["booking.main:app", "--app-dir", "backend/workspace", "--host", "127.0.0.1", "--port", "8712"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Pytest: current test file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-x", "-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: pick an exercise's tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${input:testFile}", "-x", "-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "env": { "PYTHONPATH": "${workspaceFolder}/backend/workspace" }
+    },
+    {
+      "name": "Trainer API (debug, port 8710)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["trainer.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8710"],
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testFile",
+      "type": "pickString",
+      "description": "Which tests?",
+      "options": [
+        "backend/tests/drills/test_ex01_dicts.py",
+        "backend/tests/drills/test_ex02_lists_tuples.py",
+        "backend/tests/drills/test_ex03_comprehensions.py",
+        "backend/tests/drills/test_ex04_collections.py",
+        "backend/tests/drills/test_ex05_functions.py",
+        "backend/tests/drills/test_ex06_none_handling.py",
+        "backend/tests/drills/test_ex07_strings.py",
+        "backend/tests/drills/test_ex08_sorting.py",
+        "backend/tests/drills/test_ex09_filtering.py",
+        "backend/tests/drills/test_ex10_exceptions.py",
+        "backend/tests/drills/test_ex11_context_managers.py",
+        "backend/tests/drills/test_ex12_classes.py",
+        "backend/tests/drills/test_ex13_dataclasses.py",
+        "backend/tests/drills/test_ex14_async_basics.py",
+        "backend/tests/drills/test_ex15_async_patterns.py",
+        "backend/tests/clinic/test_d1_eligibility.py",
+        "backend/tests/clinic/test_d2_missing_patients.py",
+        "backend/tests/clinic/test_d3_appointment_sorting.py",
+        "backend/tests/clinic/test_d4_validation.py",
+        "backend/tests/clinic/test_d5_stale_data.py",
+        "backend/tests/booking",
+        "backend/tests/booking/test_p1_availability.py",
+        "backend/tests/booking/test_p2_matching.py",
+        "backend/tests/booking/test_p3_booking.py",
+        "backend/tests/booking/test_p4_cancellation.py"
+      ]
+    }
+  ]
+}

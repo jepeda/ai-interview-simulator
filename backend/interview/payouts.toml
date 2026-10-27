@@ -1,0 +1,237 @@
+# AI-interview simulation content, read by backend/trainer/interview.py.
+# `interviewer_notes` are HIDDEN from the candidate: only the AI interviewer persona sees them.
+
+id = "ai1"
+title = "Provider payouts: wrong pay statement"
+minutes = 60
+order = 1
+app = "payouts"
+api_port = 8713
+portal_path = "/payouts.html"
+portal_title = "Provider portal"
+app_summary = """
+The application is a provider-payouts system: a FastAPI service that builds providers' semi-monthly
+pay statements, and the React provider portal where therapists check what they'll be paid.
+"""
+
+company_context = '''
+Acme Health helps therapists ("providers") take insurance. Providers see clients, Acme Health bills the
+payer (Aetna, Cigna, Optum, or the client for self-pay), and Acme Health pays each provider a
+**contracted rate per session** on a fixed schedule: twice a month, for the **1st–15th** and the
+**16th–end of the month**, on the provider's own calendar. Providers check what they'll be paid in
+the **provider portal**.
+
+You've joined the Provider Payments team. The codebase is a simplified slice: a FastAPI +
+SQLAlchemy **payouts API** (`backend/workspace/payouts`, port 8713) that builds pay statements, and
+the React + TypeScript **provider portal** (`frontend/src/payouts`, open
+http://127.0.0.1:5173/payouts.html). `README.md` has the tour and a domain cheat sheet.
+'''
+
+ticket = '''
+### Support ticket #5127 · Priority: High · Provider Payments
+
+**From:** Dr. Maya Patel, PsyD (Portland, OR) · via Provider Support
+**Assigned to:** you
+
+> Hi, my **Oct 1 – Oct 15** statement in the portal says I'm getting **$1,240.50**, but when I added
+> up my sessions myself I get more than that, and the support rep I chatted with said Finance's
+> number is **$1,270.50**. I also can't find my session with **Marisol Reyes on Thursday Oct 15
+> at 6:30pm**. It's on my calendar and I wrote the note that night, but it's showing up on my
+> **Oct 16 – 31** statement instead. And honestly the page is confusing: the statement header says
+> **"Sep 30 – Oct 14, 2026"**. Which is it?? I budget around these payments, so I need to know what's
+> actually coming.
+
+**Support notes:**
+- Reproduced in the portal: signed in as Dr. Maya Patel → Payments → the first-half-of-October statement.
+- Finance confirms the Oct 1–15 payout for Dr. Patel should be **$1,270.50**.
+- Other providers haven't complained, but most of our providers are on the East Coast.
+
+**Your task:** find the root cause(s), fix them, and make sure it can't silently happen again.
+The bug's tests are already in the file tree (`backend/tests/payouts/test_bug_pay_periods.py`,
+`frontend/tests/payouts/format.test.ts`). When they pass, the feature requests unlock.
+'''
+
+interviewer_notes = '''
+ROLE: You are the interviewer, a senior engineer on Acme Health's Provider Payments team. Be friendly
+and concise. You are a domain resource: answer domain and product questions directly. You are NOT a
+debugger for the candidate: do not name files, functions or root causes. If the candidate asks you to
+just tell them the fix, redirect ("What have you found so far?", "What does the API return for that
+statement?"). Only confirm or deny a specific hypothesis the candidate states after real
+investigation ("Is it that period bounds are computed in UTC?" -> "That's a good hypothesis. How would
+you confirm it?" -> once they show evidence, "Yes, that's it").
+
+GLOSSARY
+- Provider: a therapist (PsyD, LCSW, LPC...). Has an IANA timezone (where they practice).
+- CPT code: billing code for the service. 90791 = intake/diagnostic eval, 90834 = 45-min
+  psychotherapy, 90837 = 60-min psychotherapy.
+- Payer: the insurer billed (Aetna, Cigna, Optum) or "Self-pay" (client pays out of pocket).
+- Fee schedule: the contracted rate Acme Health pays the provider per (payer, CPT). Acme Health pays the
+  provider on schedule even before the payer pays Acme Health (Acme Health carries that risk).
+- ERA / remit (835): the payer's electronic remittance to Acme Health. NOT used to compute provider pay
+  in this app; mention only if asked.
+- Clawback / recoupment: a payer takes money back after an audit; Acme Health passes it on to the
+  provider as a negative adjustment.
+- Late cancel: client cancels < 24h before. Provider is paid a flat late-cancel fee. No-shows are
+  NOT paid to the provider here (the no-show fee goes to collections).
+- Pay periods: semi-monthly, 1st-15th and 16th-end of month, on the PROVIDER'S local calendar
+  (Finance policy, it's in the README). Statements are addressed by the period's first day.
+- Payout: sent 5 business days after the period ends (that's feature "paydate").
+
+THE BUG (do not volunteer this):
+Root cause has two layers.
+1) Backend (services/periods.py + services/statements.py): pay periods are computed in UTC.
+   - `query_bounds(period)` builds naive midnights (`datetime.combine(day, time.min)`), which the
+     naive-UTC DB column treats as UTC midnight, not the provider's local midnight.
+   - `period_of(appointment)` uses `appointment.starts_at.date()` (UTC date).
+   - statements.py sets `service_date=appt.starts_at.date()` (UTC date).
+   Effect for LA (UTC-7 in Oct): the Oct 15 6:30pm PT session is 01:30Z Oct 16 -> lands in Oct 16-31.
+   ALSO a Sep 30 5:30pm PT session (Tamara Brooks, Cigna 90834, $135.00) is 00:30Z Oct 1 -> wrongly
+   pulled INTO Oct 1-15. That's why the shown total is $1,240.50 = $1,270.50 - $165.00 + $135.00.
+   (A sharp candidate notices the extra Sep 30 session too: strong signal.)
+   Correct fix: build bounds as local midnights with the provider's tz
+   (`datetime.combine(day, time.min, tzinfo=zone(provider.timezone))`) and convert with `to_db`,
+   so each bound gets its own offset (DST: Nov 1-15 starts PDT, ends PST). Derive service_date and
+   period_of from `from_db(starts_at).astimezone(tz).date()`. Passing tz in from the provider is
+   the clean approach. Weak fixes: hard-coding -7/-8 hours, adding a fixed offset, or fixing only
+   one of the three places (tests catch DST and an East Coast provider).
+2) Frontend (frontend/src/payouts/format.ts): `formatDate` does `new Date("2026-10-01")`, which JS
+   parses as UTC midnight -> shown as Sep 30 in US timezones. Also `formatPeriod` takes the year
+   from `new Date(end)` (so "Jan 1-15, 2027" shows as "Dec 31 - Jan 14, 2027"). Fix: parse the
+   Y-M-D parts and build a local date (`new Date(y, m - 1, d)`), or format with timeZone "UTC".
+   The time column (formatTime) is already correct: it uses the provider's timezone.
+
+Answers to likely questions:
+- "Which timezone should periods use?" -> The provider's own timezone; it's Finance policy. A
+  session belongs to the period containing its local date of service.
+- "What if a provider moves timezones?" -> Out of scope; use their current timezone.
+- "Is $1,270.50 definitely right?" -> Yes, Finance computed it by hand from the session list.
+- "Can I change the API response shape?" -> Prefer not for the bug fix; the portal and mobile app
+  rely on it. Adding fields is fine.
+- "Should I add tests?" -> Yes please, the existing ones are a start.
+- "Is the database data wrong?" -> No, starts_at is correct UTC; the seed converts local times.
+
+SIGNALS
+Strong: reproduces first (portal + Swagger), states hypotheses, reads README/timeutil conventions,
+uses the AI for search/explanation then verifies its output, fixes all layers, notices the Sep 30
+session, runs tests, thinks about DST/other timezones and about what providers see, explains the
+fix and its impact (was anyone already paid wrong? backfill/communication).
+Weak: edits code before understanding it, pastes AI output without reading, hard-codes offsets,
+fixes only the frontend label or only one backend spot, never runs tests, goes silent.
+'''
+
+[[feature]]
+id = "csv"
+title = "Download statement as CSV"
+summary = "Providers' accountants want each pay statement as a spreadsheet."
+spec = '''
+**From:** Priya (PM, Provider Experience)
+
+Several group practices told us their bookkeepers re-type our statements into QuickBooks every
+two weeks. Let's give them a **Download CSV** button on each statement.
+
+- Endpoint: `GET /providers/{id}/statements/{period_start}.csv` returns the file (it should download
+  with a sensible filename).
+- One row per paid session and one per adjustment, in date order, plus a total at the bottom.
+- Columns: **Date, Client, Service, Payer, Type, Description, Amount**. Amounts as plain dollars
+  (`165.00`, `-35.00`): no `$`, no thousands separators, so spreadsheets read them as numbers.
+- Add the button to the statement in the portal.
+
+Open questions are welcome. Ask me (the interviewer) anything that isn't clear.
+'''
+interviewer_notes = '''
+Answers (the tests check these exact behaviors):
+- Header row exactly: Date,Client,Service,Payer,Type,Description,Amount
+- Date: ISO YYYY-MM-DD; for sessions the provider-local date of service, for adjustments the
+  effective_date.
+- Client: client_name as stored ("Nguyen, Linh"). It contains a comma, so it must be quoted:
+  use the csv module, never ",".join(). (Good catch if they spot this.)
+- Service: the CPT code ("90837"). Payer: payer name.
+- Type: "Session" for completed sessions, "Late cancel" for late cancels, "Adjustment" for
+  adjustments. No-shows and in-time cancellations don't appear (they pay $0; they're not on the
+  statement at all).
+- Description: blank for sessions; the adjustment's reason for adjustments.
+- Amount: dollars with 2 decimals, negative with a leading "-" ("-35.00"). Use integer math on
+  cents (divmod), not float formatting, ideally.
+- Sorted by date; on the same date sessions come before adjustments.
+- Last row: blank cells except Type = "Total" and Amount = the statement total.
+- Response: Content-Type text/csv; Content-Disposition: attachment; filename="statement-<period_start>.csv".
+- Invalid period start (not 1st/16th) -> 422 like the JSON endpoint; unknown provider -> 404.
+- Gotcha worth hinting at only if they're stuck: route order. `/statements/{period_start}` with a
+  `date` param also matches "2026-10-01.csv" and returns 422, so the .csv route must be declared
+  first (or the path param handled differently).
+- Frontend: an <a href=... download> link using the same /payouts-api prefix is enough.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/payouts/test_feature_csv.py" }]
+
+[[feature]]
+id = "paydate"
+title = "Show the expected pay date"
+summary = "Tell providers when each payout will actually hit their bank."
+spec = '''
+**From:** Marcus (Provider Support lead)
+
+Our #1 support question is "when will I get paid for this period?" The statement API has a
+`pay_date` field that's always `null`, and the portal says "Pay date: pending".
+
+Finance's rule: **payouts are sent 5 business days after the pay period ends.** Business days
+skip weekends and Acme Health's bank holidays (Finance keeps the list in `business_calendar.py`).
+
+- Fill in `pay_date` on statements and on the list of periods.
+- Show it in the portal on the statement and in the Payments list.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- "5 business days after the period ends": count forward from the day AFTER period_end; the 5th
+  business day is the pay date. Weekends and ACME_HOLIDAYS don't count. The period end itself
+  never counts, even if it's a business day.
+- Examples: Oct 1-15 2026 (ends Thu Oct 15) -> Thu Oct 22. Oct 16-31 (ends Sat) -> Fri Nov 6.
+  Nov 1-15 (ends Sun) -> Fri Nov 20. Nov 16-30 (ends Mon) -> Mon Dec 7. Dec 16-31 (ends Thu) ->
+  Fri Jan 8 2027, because Jan 1 is a holiday.
+- Both GET /statements/{start} and GET /periods return pay_date as "YYYY-MM-DD".
+- Holidays are only the dates in business_calendar.py; no need for a holiday library.
+- Timezones: pay date is a calendar date; no timezone math needed.
+- Good engineering: a small pure function (e.g. services/paydates.py expected_pay_date(end))
+  that's easy to unit test; don't put it in the router.
+- Frontend: show it with the (fixed) formatDate(..., true); careful, it's a calendar date.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/payouts/test_feature_paydate.py" }]
+
+[[feature]]
+id = "carryover"
+title = "Negative balance carryover"
+summary = "Never send a negative payout: carry the balance into the next period."
+spec = '''
+**From:** Dana (Finance Ops)
+
+When a payer claws money back (e.g. Optum's audit recoupment for Sam Okafor), a provider's
+period can come out **negative**. Today the portal shows a negative total and our payout job
+chokes on it. Policy:
+
+- A period's payout is **never negative**: if the total is below zero, we pay **$0**.
+- The negative remainder **carries into the next pay period** as a line item
+  ("Carryover from <period>") so the provider can see where it came from.
+- It can take more than one period to pay it back.
+
+Please show the payout amount on statements (and the list of periods) and make the carryover
+visible in the portal.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- Add `payout_cents` to statements (and period summaries): max(total_cents, 0).
+- `total_cents` stays the NET for the period INCLUDING any carryover in (can be negative).
+- Carryover appears in the statement's `adjustments` list with a reason starting with
+  "Carryover from" and mentioning the source period's start date in ISO form (e.g.
+  "Carryover from 2026-10-16 to 2026-10-31"), amount = the previous period's negative total.
+  It has no DB id (id null is fine; it's computed, not stored).
+- Chains: if the next period is still negative after the carryover, its whole negative total
+  carries again (not double-counted: carry = min(previous total including its carryover, 0)).
+- Once a period is non-negative, nothing more carries.
+- Positive periods never have a carryover line.
+- Carry only into the next period that has activity is acceptable; the tests use consecutive periods.
+- Don't store carryovers in the DB (they'd go stale if an adjustment is edited); compute them by
+  walking periods in order from the provider's first active period. Performance is fine at this
+  scale; mention caching/materializing as a follow-up.
+- Seed example: Sam Okafor (id 3): Oct 16-31 = $300.00 - $1,200.00 = -$900.00 -> pays $0;
+  Nov 1-15 = $550.00 - $900.00 = -$350.00 -> pays $0; Nov 16-30 = $595.00 - $350.00 = $245.00.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/payouts/test_feature_carryover.py" }]

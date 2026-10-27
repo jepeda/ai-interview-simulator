@@ -1,0 +1,54 @@
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f5f6f8;
+  color: #1d2433;
+}
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+}
+header {
+  padding: 8px 0 14px;
+  font-size: 15px;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e3e6ec;
+  border-radius: 10px;
+  padding: 16px;
+}
+.card.error {
+  color: #b42318;
+}
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.total strong {
+  font-size: 26px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th,
+td {
+  text-align: left;
+  padding: 7px 6px;
+  border-bottom: 1px solid #eef0f3;
+}
+th {
+  color: #667085;
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

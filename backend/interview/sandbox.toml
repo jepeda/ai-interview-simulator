@@ -1,0 +1,75 @@
+# Sandbox: a tiny scenario for trying out / demoing the mock-interview screen.
+# `sandbox = true` keeps its sessions out of "Your attempts" and out of the grader's comparisons.
+
+id = "ai0"
+title = "Sandbox: weekly earnings card"
+minutes = 15
+order = 0
+sandbox = true
+app = "sandbox"
+api_port = 8716
+portal_path = "/sandbox.html"
+portal_title = "Earnings card"
+app_summary = """
+The application is a tiny sandbox: a FastAPI service with in-memory data that builds a provider's
+weekly earnings card, and a one-page React card that shows it.
+"""
+
+company_context = '''
+**Sandbox (doesn't count as an attempt).** A deliberately small app for trying the interview
+screen: the AI assistant, the interviewer, the tests, the app preview and narration all work exactly
+as in the real scenarios, and you still get the review and grading at the end.
+
+Acme Health pays therapists ("providers") a contracted rate per session. The **earnings card**
+(`frontend/src/sandbox`, open http://127.0.0.1:5173/sandbox.html) shows what a provider has earned
+this week, from the **sandbox API** (`backend/workspace/sandbox`, port 8716). `README.md` has the
+tour and the pay rules.
+'''
+
+ticket = '''
+### Support ticket #1001 · Priority: Medium · Provider Payments
+
+**From:** Dr. Sam Rivera, PsyD · via Provider Support
+
+> My earnings card for the week of **Oct 19** says **$985**. That can't be right: one client
+> **no-showed** on Friday and another **cancelled late** on Wednesday. Finance told me I should get
+> **$760.00** this week. Also, why doesn't it show cents?
+
+**Your task:** find the root cause(s) and fix them. The bug's tests are in the file tree
+(`backend/tests/sandbox/test_bug_week.py`, `frontend/tests/sandbox/format.test.ts`). When they pass,
+the feature request unlocks.
+'''
+
+interviewer_notes = '''
+ROLE: friendly interviewer for a SHORT demo. Answer domain questions directly; don't name the files
+or the fix. Confirm a hypothesis once the candidate states it with evidence.
+
+THE BUG:
+1) Backend (services/earnings.py): `session_amount` pays every session its full CPT rate, and the
+   filter only drops `cancelled`. So the Wed late cancel (90837) pays $165.00 instead of the $75.00
+   late-cancel fee, and the Fri no-show (90834, $135.00) is paid and listed at all.
+   Shown: 165 + 135 + 165 + 220 + 135 + 165 = $985.00. Correct: 165 + 135 + 75 + 220 + 165 = $760.00.
+   Strong fix: pay by status (completed -> rate, late_cancel -> fee, others 0) and keep only paid
+   statuses on the card.
+2) Frontend (format.ts): `formatCents` does `$${cents / 100}` -> "$985", "$1234.56". Fix with
+   Intl.NumberFormat currency (or toFixed(2) plus grouping).
+
+Answers: late-cancel fee is a flat $75.00 regardless of CPT; no-shows pay nothing; weeks start Monday.
+'''
+
+[[feature]]
+id = "payer"
+title = "Filter the card by payer"
+summary = "Group practices want to see one insurer's sessions at a time."
+spec = '''
+**From:** Priya (PM)
+
+Add an optional `payer` query parameter to `GET /providers/{id}/week` that limits the card (lines
+and total) to that payer. Ask me if anything is unclear.
+'''
+interviewer_notes = '''
+Tested behavior: `payer` matches case-insensitively against Aetna, Cigna, Optum, Self-pay; the
+response echoes the canonical name in a `payer` field; unknown payer -> 422 with error code
+"unknown_payer". Lines and total_cents only include that payer. A dropdown in the UI is a bonus.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/sandbox/test_feature_payer.py" }]

@@ -1,0 +1,51 @@
+"""Domain errors. Services raise these; register_error_handlers turns them into HTTP responses:
+
+    HTTP <status>  {"error": {"code": "<code>", "message": "<message>"}}
+
+Raise the most specific class that fits. Don't raise HTTPException from services.
+"""
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+
+class DomainError(Exception):
+    status_code = 400
+    code = "domain_error"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        if code is not None:
+            self.code = code
+
+
+class NotFound(DomainError):
+    status_code = 404
+    code = "not_found"
+
+
+class InvalidRequest(DomainError):
+    status_code = 422
+    code = "invalid_request"
+
+
+class Conflict(DomainError):
+    status_code = 409
+    code = "conflict"
+
+
+class MissingRate(DomainError):
+    """A completed session has no contracted rate on its date of service. Ops must fix the fee schedule."""
+
+    status_code = 409
+    code = "missing_rate"
+
+
+def register_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DomainError)
+    async def handle_domain_error(_: Request, exc: DomainError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.code, "message": exc.message}},
+        )

@@ -1,0 +1,43 @@
+[project]
+name = "interview-trainer"
+version = "0.1.0"
+description = "Python/FastAPI interview training environment"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.36",
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "pytest>=8.3",
+    "jedi>=0.20.1",
+    "ruff>=0.17.1",
+    "tzdata>=2026.5",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-p no:cacheprovider"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["backend/starters"]
+
+[tool.ruff.lint]
+# Deliberately small rule set: rules like flake8-bugbear would point straight at the
+# planted bugs (e.g. B006 mutable default) and spoil the exercises.
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["booking", "clinic", "drills", "earnings", "payouts", "remits", "sandbox", "trainer", "warmup"]

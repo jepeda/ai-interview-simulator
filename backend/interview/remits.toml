@@ -1,0 +1,304 @@
+# AI-interview simulation content, read by backend/trainer/interview.py.
+# `interviewer_notes` are HIDDEN from the candidate: only the AI interviewer persona sees them.
+
+id = "ai2"
+title = "Claims & remits: a re-delivered ERA"
+minutes = 60
+order = 2
+app = "remits"
+api_port = 8714
+portal_path = "/remits.html"
+portal_title = "Claims portal"
+app_summary = """
+The application is a claims & remittance-posting system for Acme Health's revenue-cycle team: a FastAPI
+service that posts payers' ERA/835 remittances (dollar strings) to insurance claims as integer cents
+and computes claim balances and statuses, and the React claims portal where billing specialists work
+claims and reconcile remittances.
+"""
+
+company_context = '''
+Acme Health helps therapists ("providers") take insurance. For every session, Acme Health sends the
+client's insurer ("payer": Aetna, Cigna, Optum) a **claim**. Payers answer with a **remittance**:
+a payment (EFT or check) plus an **ERA / 835 file** that explains, claim by claim, what they paid,
+what was written off under the contract, and what the client owes (copay, coinsurance, deductible).
+**Cash posting** applies those ERAs to our claims so every claim and every bank deposit balances.
+
+You've joined the Revenue Cycle team. The codebase is a simplified slice: a FastAPI + SQLAlchemy
+**remits API** (`backend/workspace/remits`, port 8714) that receives ERAs from our clearinghouse
+and posts them, and the React + TypeScript **claims portal** (`frontend/src/remits`, open
+http://127.0.0.1:5173/remits.html) the billing team works in. `README.md` has the tour and a domain
+cheat sheet (CARC codes, balancing, claim statuses).
+'''
+
+ticket = '''
+### Support ticket #6243 · Priority: High · Revenue Cycle
+
+**From:** Renee Alvarado, Billing Specialist (Cash Posting) · via #rev-cycle-help
+**Assigned to:** you
+
+> Optum's clearinghouse had an outage last week and **re-sent their Oct 9 ERA** (EFT trace
+> **1102948731**) on Oct 12. Since then every claim on that payment shows **Overpaid**. Example:
+> **HW-1042** (Marisol Reyes, DOS Sep 24, Dr. Patel). The portal says Optum paid **$274.32** and the
+> balance is **($200.98)**. Optum's EOB shows **one** payment of **$137.17**, and the claim should be
+> paid in full with a $0.00 balance. The Remittances tab lists that Optum payment twice, too.
+>
+> Not sure if it's related: Aetna's Oct 2 claims **HW-1029** and **HW-1030** are stuck in
+> **Partially paid** with a **$0.01** balance, even though Aetna paid exactly what the EOB says
+> ($138.17 each), and that remit is flagged **Out of balance**. And on the Optum remit, the
+> recoupment line shows **($43.15)**, but Optum's recoupment letter for HW-0987 says **$42.15**.
+
+**Support notes:**
+- Reproduced in the portal: Claims → HW-1042, and Remittances → Optum EFT 1102948731 (listed twice).
+- Finance: the bank shows exactly **one** Optum deposit of **$594.39** on Oct 9, and one Aetna
+  deposit of **$367.49** on Oct 2. Month-end close is Friday: every remit must be posted once and
+  be in balance.
+
+**Your task:** find the root cause(s), fix them, and make sure a re-sent file can't do this again.
+The bug's tests are already in the file tree (`backend/tests/remits/test_bug_remit_posting.py`,
+`frontend/tests/remits/format.test.ts`). When they pass, the feature requests unlock.
+'''
+
+interviewer_notes = '''
+ROLE: You are the interviewer, a senior engineer on Acme Health's Revenue Cycle team. Be friendly and
+concise. You are a domain resource: answer domain and product questions directly. You are NOT a
+debugger for the candidate: do not name files, functions or root causes. If the candidate asks you to
+just tell them the fix, redirect ("What have you found so far?", "What does the API return for that
+claim?"). Only confirm or deny a specific hypothesis the candidate states after real investigation
+("Is posting not idempotent on the trace number?" -> "Good hypothesis. How would you confirm it?" ->
+once they show evidence, "Yes, that's it").
+
+GLOSSARY
+- Claim: one session billed to one payer, claim number "HW-1042". Billed = our chargemaster price
+  (90791 $250, 90834 $180, 90837 $200), always above what the payer allows.
+- Payer: the insurer (Aetna, Cigna, Optum). Fee schedule: our contracted ALLOWED amount per
+  (payer, CPT). Allowed = what the payer pays + what the client owes.
+- ERA / 835 / remittance: the payer's electronic explanation of a payment. One remittance pays many
+  claims. BPR02 = total paid (what hits the bank), TRN02 = trace number (EFT trace / check number),
+  CLP = one claim line (CLP02 status: 1 processed, 4 denied, 22 reversal; CLP03 billed; CLP04 paid),
+  CAS = adjustments, PLB = remit-level adjustments (WO = overpayment recovery / recoupment).
+- CAS group codes: CO contractual (written off; never billed to the client), PR patient responsibility
+  (PR-1 deductible, PR-2 coinsurance, PR-3 copay), OA other, PI payer-initiated.
+  CO-45 = above the contracted rate (normal). Denials: CO-16 missing info, CO-29 timely filing,
+  CO-50 not medically necessary, CO-197 no prior authorization.
+- Balancing: per claim line, billed = paid + sum(CAS). Per remit, BPR02 = sum(CLP04) + sum(PLB).
+  Claim balance here = billed - paid - CO/OA/PI - PR; a fully adjudicated claim balances to 0.
+- Clearinghouse: the vendor that receives 835s from payers and POSTs them to us as JSON. It delivers
+  at least once: it RETRIES on any non-2xx response and re-sends after outages.
+
+THE BUG (do not volunteer this). Three root causes, two backend + one frontend:
+
+1) Backend, idempotency (services/posting.py `post_remittance`): every POST creates a new
+   Remittance. The only duplicate guard (`remittances_repo.payment_for(remittance.id, claim.id)`, and
+   the UniqueConstraint(remittance_id, claim_id)) checks the claim against the NEW remittance id, so it
+   only catches a claim listed twice inside one file. A re-delivered file (same payer + trace number)
+   is posted again in full. The seed replays Optum's Oct 9 file twice (Oct 9 and Oct 12), so every
+   Optum claim on it gets two ClaimPayments and the remit appears twice.
+   Strong fix: look up an existing Remittance by (payer, stripped trace_number) BEFORE posting and
+   return it unchanged (200 with the original remittance; tests also accept 409), plus a DB
+   UniqueConstraint("payer", "trace_number") as the backstop for concurrent deliveries (catch
+   IntegrityError, rollback, return the existing one). The trace number is stored stripped, so the
+   lookup must strip too (a test re-sends "1102948731  ").
+   Weak fixes (tests catch them): unique on trace_number alone (Aetna and Cigna can both have check
+   004417920; a test posts the same trace for two payers); deduping claim lines by (claim, amount) or
+   "a claim can only be paid once" (a test posts paid -> reversal -> paid again with three traces,
+   all legitimate); returning 409 is OK for the tests, but ask them what the clearinghouse does on a
+   409 (it retries forever on non-2xx, so 200 is the better contract).
+
+2) Backend, money (money.py `to_cents`): `int(float(amount) * 100)`. float("137.17") * 100 is
+   13716.999999999998 and int() truncates toward zero, so $137.17 posts as 13716 cents. Same for
+   $138.17 (-> 13816), 0.29, 1.15, 4.35, 19.9..., and negatives truncate toward zero too
+   (-137.17 -> -13716). Strong fix: Decimal(amount) * 100 (exact; the schema already restricts input
+   to <= 2 decimals), or parse the string into dollars/cents with integer math. round(float * 100) is
+   defensible (it gives the right answer for 2-decimal inputs) but ask them why Decimal is better.
+   Weak: rounding only the paid amount, or "fixing" the balance with abs(balance) <= 1 tolerance in
+   claims.py (hides the bug; the remit would still be out of balance and the tests check exact cents).
+
+3) Frontend (frontend/src/remits/format.ts `formatAccounting`): hand-rolled accounting format uses
+   Math.floor(cents / 100) for the dollars, which rounds negatives toward -Infinity: -4215 ->
+   floor(-42.15) = -43 -> "($43.15)". Positive amounts and whole-dollar negatives (-3500) look fine,
+   which is why nobody noticed. Fix: work on Math.abs(cents) (or Math.trunc), or Intl.NumberFormat
+   with { style: "currency", currency: "USD", currencySign: "accounting" }.
+
+THE TICKET'S NUMBERS (all reproducible in the seeded portal):
+- HW-1042 (Optum 90837): billed 200.00, CO-45 37.83, PR-3 copay 25.00, paid 137.17 (balances: 200 =
+  137.17 + 37.83 + 25). Posted twice with truncation: paid = 2 x 13716 = 27432 -> "$274.32";
+  balance = 20000 - 27432 - 2 x 3783 - 2 x 2500 = -19998; the frontend then shows floor(-199.98) =
+  -200 dollars and 98 cents -> "($200.98)" (should be ($199.98) even for the wrong data). Correct
+  after the fixes: paid $137.17, balance $0.00, Paid.
+- HW-1029 / HW-1030 (Aetna 90837): billed 200.00, CO-45 31.83, PR-3 30.00, paid 138.17 -> posted
+  as 13816 -> balance 20000 - 13816 - 3183 - 3000 = 1 cent -> Partially paid. Aetna Oct 2 remit:
+  BPR02 367.49 = 138.17 + 138.17 + 91.15 -> total 36749 vs posted 13816 + 13816 + 9115 = 36747 ->
+  out of balance $0.02.
+- Optum Oct 9 remit: 594.39 = 87.86 + 4 x 137.17 - 42.15 (HW-1040 87.86, HW-1041..1044 137.17 each,
+  HW-1045 $0 all deductible PR-1, HW-1046 denied CO-197, PLB WO -42.15 for HW-0987). Posted:
+  8786 + 4 x 13716 - 4215 = 59435 vs 59439 -> out of balance $0.04, and it's listed twice.
+  HW-1041/1043/1044 are also 1-cent short, which only becomes visible once the duplicate is fixed
+  (layered bug: good sign if they predict it).
+- Recoupment: -4215 shown as "($43.15)" by the frontend; the API correctly returns -4215.
+NOTE ON DATA: the bug corrupts data at WRITE time. The seed replays every ERA through
+post_remittance, so after fixing the code they must reset the demo data (the App tab's "Reset demo
+data" button, see README) to see correct numbers. The reset is logged as a data_reset event. Also, create_all won't add a new unique constraint to
+an existing table. Strong candidates raise the production cleanup: identify duplicate remittances
+(same payer + trace), delete the later copy and its payments/adjustments, and re-derive cents. Note
+that the raw 835 isn't stored, so the truncated cents can't be recomputed from the DB alone: they'd
+need the files from the clearinghouse (suggest storing raw payloads). Bonus: alert on out-of-balance
+remits instead of letting them sit.
+
+Answers to likely questions:
+- "Is a trace number unique?" -> Unique per payer, not globally: two payers can issue the same check
+  number. Payer + trace number identifies a payment.
+- "What should a re-sent file return?" -> The clearinghouse retries on any non-2xx, so we'd like a
+  2xx (200) with the remittance we already posted, and nothing changed. 409 is acceptable to the
+  tests, but discuss the retry behavior.
+- "What if the re-sent file has different content than the first one?" -> Rare; out of scope. Same
+  payer + trace = same payment; logging/alerting on a mismatch is a nice-to-have.
+- "Can a claim be paid by more than one remittance?" -> Yes: reversals (CLP02 22, negative amounts)
+  and corrected/supplemental payments arrive on later remits with different traces.
+- "Why are amounts strings?" -> The 835 is a text format (X12); our clearinghouse keeps them as
+  decimal strings with at most 2 decimals (the schema validates that).
+- "Rounding mode?" -> There should never be anything to round: inputs have <= 2 decimals. Exact
+  conversion is the requirement.
+- "Can I change the API response shape?" -> Prefer not for the bug fix; adding fields is fine.
+- "Should I fix existing data?" -> For the interview, reseed (the App tab's "Reset demo data" button). Tell me how you'd
+  clean production.
+- "Is $594.39 right?" -> Yes, Finance matched it to the bank deposit.
+
+SIGNALS
+Strong: reproduces first (portal + Swagger GET /claims/HW-1042, GET /remittances), compares the API
+with the portal to split frontend vs backend, notices the two Optum remittances share a trace number,
+reads README/money.py, checks the arithmetic (13716 vs 13717), uses the AI to explain/search and then
+verifies its claims, fixes all three, adds the DB constraint, thinks about races, retries and
+existing bad data, runs the tests, explains impact (refunds we didn't owe, month-end close).
+Weak: edits before understanding, adds a "skip if claim already paid" guard, hard-codes a 1-cent
+tolerance, patches only the display, never reseeds/verifies in the portal, pastes AI output unread.
+'''
+
+[[feature]]
+id = "denials"
+title = "Denial work queue with aging"
+summary = "Give the billing team a prioritized list of denied claims to work."
+spec = '''
+**From:** Keisha (Revenue Cycle lead)
+
+Denied claims are money we'll lose if nobody appeals or rebills them in time, and right now people
+find them by scrolling the claims list. I'd like a **denial work queue**:
+
+- `GET /denials`: every denied claim, **oldest first**, with the denial reason (e.g. `CO-197`
+  and what it means), when it was denied, and **how many days it's been outstanding**.
+- Bucket them like our AR aging report: **0–30, 31–60, 61–90, 90+ days**, and give me the
+  **count per bucket** so I can see the backlog at a glance.
+- Let me filter by **payer** and by **denial code**.
+- A "Denials" view in the portal would be great.
+
+Ask me anything that isn't clear.
+'''
+interviewer_notes = '''
+Answers (the tests check these exact behaviors):
+- "Denied" = the existing claim status "denied" (services/claims.py: nothing paid, and a denial
+  CARC on a non-PR group). Reuse it; don't invent a second definition. A claim that was denied and
+  later paid on a corrected remit is no longer denied (status recomputes). A $0 payment where it all
+  went to the client's deductible (PR-1) is NOT a denial.
+- Response: {"as_of": "YYYY-MM-DD", "buckets": {"0-30": n, "31-60": n, "61-90": n, "90+": n},
+  "claims": [...]}. All four bucket keys are always present (0 when empty), counted AFTER filters.
+- Each claim: claim_number, patient_name, provider_name, payer, cpt_code, date_of_service,
+  billed_cents, denial_code ("CO-197", group-reason), denial_reason (carc.describe, e.g.
+  "Precertification/authorization absent"), denied_on (paid_on of the remittance that denied it),
+  days_outstanding, bucket.
+- days_outstanding = today - date_of_service in days (AR aging counts from the DATE OF SERVICE, not
+  the denial date: timely-filing clocks run from DOS). "Today" comes from the clock.get_today
+  dependency so tests can pin it (tests override it; don't call date.today() directly).
+- Buckets are inclusive: 0-30 means 0..30 days, 31-60, 61-90, and "90+" means 91 days or more.
+  (Day 90 is in 61-90.)
+- Sorted by days_outstanding descending (oldest first), ties by claim_number ascending.
+- Filters: `payer` is case-insensitive exact ("cigna" works); `code` is the full "CO-197" label.
+  Unknown payer/code -> empty list, not 404.
+- Denial code if a claim has several: the denial adjustment on the MOST RECENT remittance.
+- Seed check (today = 2026-10-26): HW-1028 CO-29 90+, HW-1036 CO-197 61-90, HW-1032 CO-16 31-60,
+  HW-1046 CO-197 0-30.
+- Good engineering: a service module with a small pure bucket_for(days) function; the router just
+  wires dependencies. Computing in Python over claims is fine at this scale; mention pushing the
+  filter into SQL / materializing status as a follow-up.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/remits/test_feature_denials.py" }]
+
+[[feature]]
+id = "underpaid"
+title = "Underpayment detection"
+summary = "Catch payers paying below our contracted rates."
+spec = '''
+**From:** Dana (Payer Contracting)
+
+Payers sometimes pay us below the contract, usually because they loaded an old fee schedule. We only
+find out months later when someone audits by hand. We have the contracted rates in the fee schedule
+table, so let's flag these automatically:
+
+- `GET /underpayments`: claims where the payer **allowed less than our contracted rate**, biggest
+  shortfall first, plus the **total** we're owed across them.
+- Small differences aren't worth an appeal, so ignore anything **within a dollar**.
+- Show it somewhere in the portal so we can start appeals.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- allowed = what the payer paid + patient responsibility (PR adjustments), summed across ALL
+  remittances posted to the claim. NOT just "paid": if the whole allowed amount went to the client's
+  deductible, the payer paid $0 but allowed the full contract, and that's not an underpayment.
+  Contractual write-offs (CO-45) are NOT part of allowed.
+- expected = the FeeSchedule allowed_cents for (claim.payer, claim.cpt_code). Contracts are per payer
+  + CPT (not per provider). No contract on file -> skip the claim (not an error).
+- variance = expected - allowed. Flag when variance > 100 cents (strictly more than $1.00; exactly
+  $1.00 is NOT flagged). Overpayments (negative variance) aren't underpayments.
+- Only claims with money posted and not denied/overpaid: status "paid" or "partially_paid".
+  Submitted (nothing posted) and denied claims are excluded (denials have their own queue).
+- A later supplemental payment that brings allowed up to the contract clears the flag (sum across
+  remits).
+- Response: {"tolerance_cents": 100, "total_variance_cents": sum, "claims": [{claim_number,
+  patient_name, payer, cpt_code, date_of_service, expected_cents, allowed_cents, variance_cents}]},
+  sorted by variance_cents descending, ties by claim_number.
+- Tolerance is a flat $1.00, not a percentage (if asked: a constant is fine; config later).
+- Seed check: HW-1050 and HW-1051 (Aetna 90837 allowed $158.58 vs contract $168.17): 959 each,
+  total 1918. HW-1035 (Cigna, $0.75 short) is within tolerance. Note: if the to_cents bug weren't
+  fixed, the Optum/Aetna 1-cent claims would be within tolerance anyway.
+- Integer cents throughout; no floats.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/remits/test_feature_underpaid.py" }]
+
+[[feature]]
+id = "suspense"
+title = "Unmatched lines go to suspense"
+summary = "Don't reject a whole payment because one claim number is wrong."
+spec = '''
+**From:** Luis (Cash Posting lead)
+
+When an ERA has a line for a claim number we don't recognize (payer typo, a claim from before our
+migration), `POST /remittances` fails with 404 and **the whole payment** sits unposted until
+engineering looks at it, even though every other claim on it is fine. Instead:
+
+- Post everything we can match. **Park** the lines we can't match in a **suspense** queue.
+- `GET /suspense` lists what's parked so the team can research it.
+- Let us **match** a parked line to the right claim, which posts it like any other payment.
+- The remittance should still **balance**: parked money isn't lost, it's just not on a claim yet.
+'''
+interviewer_notes = '''
+Answers (tests check these):
+- Only UNKNOWN claim numbers go to suspense. A known claim billed to another payer still fails the
+  file with 422 (unchanged). POST still returns 201 even when some (or all) lines are parked.
+- Store each parked line (SuspenseLine: remittance_id, claim_number exactly as sent, billed_cents,
+  paid_cents, enough to post it later: the adjustments, e.g. the original line as JSON, and
+  matched_claim_id / resolved flag).
+- GET /suspense: open (unmatched) lines, oldest first: [{id, remittance_id, payer, trace_number,
+  paid_on, claim_number, billed_cents, paid_cents}].
+- Remittance summary/detail gets suspense_cents (sum of paid on OPEN parked lines) and the detail
+  gets unmatched_lines (same shape as /suspense). posted_cents excludes parked lines;
+  out_of_balance_cents = total_paid - posted - suspense, so a remit with parked money is still 0
+  out of balance. claim_count counts posted claim lines only.
+- POST /suspense/{id}/match with body {"claim_number": "HW-12"} -> posts the line (with its
+  adjustments) to that claim AS PART OF THE ORIGINAL REMITTANCE (the payment shows that trace number),
+  marks it matched, returns the claim detail (200). Afterwards: not in /suspense, remit posted_cents
+  includes it, suspense_cents 0, still balanced.
+- Errors: unknown suspense id -> 404; unknown target claim -> 404; claim billed to another payer ->
+  422 (it's that payer's money); already matched -> 409.
+- Re-delivery of the same file must not park the lines twice (falls out of the idempotency fix).
+- Good engineering: reuse the existing per-line posting function for both paths; all-or-nothing
+  transaction around the match.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/remits/test_feature_suspense.py" }]

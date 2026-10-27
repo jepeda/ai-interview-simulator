@@ -1,0 +1,101 @@
+# 30-minute warmup: a compact version of the AI interview (bug + one quick feature).
+
+id = "ai4"
+title = "Warmup: patient balances off by a few cents"
+minutes = 30
+order = 4
+app = "warmup"
+api_port = 8717
+portal_path = "/warmup.html"
+portal_title = "Billing page"
+app_summary = """
+The application is a provider practice's billing view: a FastAPI service with in-memory data that
+computes what clients still owe (copay or coinsurance minus payments), and a React page that lists
+the outstanding balances for the front desk.
+"""
+
+company_context = '''
+**30-minute warmup.** Same format as the real thing, half the length: a user-reported bug in a
+small full-stack app, then one quick feature request. Aim to fix the bug in ~15 minutes.
+
+Acme Health helps therapists ("providers") run their practice. After insurance processes a session,
+the client usually owes part of it: a flat **copay** or a percentage **coinsurance**. The
+**billing page** (`frontend/src/warmup`, http://127.0.0.1:5173/warmup.html) shows the front desk
+who still owes what, from the **balances API** (`backend/workspace/warmup`, port 8717).
+`README.md` has the tour and the billing rules.
+'''
+
+ticket = '''
+### Support ticket #2210 · Priority: Medium · Billing
+
+**From:** Priya Shah, office manager at Jordan Lee, LCSW's practice
+
+> Two things on the Billing page. The outstanding total says **$326.66**, but the billing export
+> our accountant pulled says **$326.69**. A few cents, I know, but our books have to match. And
+> the list is supposed to show the **largest balances first** so we know who to call, but
+> **Ngozi Okafor ($153.35)** is at the very bottom, under people who owe $25.
+
+**Your task:** find the root causes and fix them. The bug's tests are in the file tree
+(`backend/tests/warmup/test_bug_balances.py`, `frontend/tests/warmup/balances.test.ts`). When they
+pass, the feature requests unlock.
+'''
+
+interviewer_notes = '''
+ROLE: friendly senior engineer on Billing. Short interview (30 min): keep answers brief, nudge on
+time at ~15 min if they're still on the bug. Answer domain questions; don't name files or the fix.
+Confirm a hypothesis once they state it with evidence.
+
+THE BUG:
+1) Backend (money.py `percent_of`): `int(cents * pct / 100)` truncates (and uses floats), so
+   coinsurance loses a cent whenever the share ends in a fraction: Chen 20% of $133.33 = $26.666
+   -> 2666 (should be 2667); Garcia 20% of $174.99 = $34.998 -> 3499 (3500), balance 2499 (2500);
+   Rossi 20% of $458.33 = $91.666 -> 9166 (9167). Shown 32666, correct 32669: 3 cents.
+   Strong fix: integer half-up rounding `(cents * pct + 50) // 100` (or Decimal with
+   ROUND_HALF_UP). Weak: `round()` (banker's rounding: 2.5 -> 2; a test catches it), float math.
+2) Frontend (balances.ts `sortLargestFirst`): sorts by the FORMATTED string, so "$91.67" >
+   "$153.35" (character by character). Fix: compare balance_cents numerically, tie-break by the
+   oldest date of service (tested), and don't mutate the input.
+
+Answers: "Half a cent?" -> rounds up (Finance policy, in the README). "Which invoices count?" ->
+open ones with a balance above zero; paid and written-off don't. "Can the export be wrong?" -> No,
+the accountant computed it from the same invoices with the policy rounding.
+SIGNALS: strong = reproduces in the app/Swagger, reads the README rounding rule, proves the 3-cent
+gap with arithmetic, fixes both layers, runs tests. Weak = patches the total, uses round(), only
+fixes one layer.
+'''
+
+[[feature]]
+id = "aging"
+title = "Aging buckets"
+summary = "Show how long each balance has been outstanding."
+spec = '''
+**From:** Priya (office manager)
+
+Our accountant buckets balances by age. Add the age of each balance and totals per bucket
+(0-30, 31-60, 61-90, 90+ days) to the balances API. Ask me anything that's unclear.
+'''
+interviewer_notes = '''
+Tested behavior: optional `as_of` query param (YYYY-MM-DD, default today). Each line gets
+`days_outstanding` = days from service_date to as_of (never negative) and `bucket` in
+"0-30" | "31-60" | "61-90" | "90+" (upper bounds inclusive: 30 days is "0-30"). The response gets
+`buckets`: an object with all four keys, each the sum of balance_cents in that bucket (0 if none),
+summing to total_cents.
+'''
+tests = [{ runner = "pytest", path = "backend/tests/warmup/test_feature_aging.py" }]
+
+[[feature]]
+id = "minimum"
+title = "Only balances worth a call"
+summary = "Hide small balances from the follow-up list."
+spec = '''
+**From:** Priya (office manager)
+
+Calling about $5 isn't worth the front desk's time. Let us ask the API for balances at or above a
+minimum. Ask me anything that's unclear.
+'''
+interviewer_notes = '''
+Tested behavior: optional `min_balance_cents` query param (default 0 = everything); keeps lines with
+balance_cents >= the minimum (inclusive) and recomputes total_cents from the kept lines; negative ->
+422 with error code "invalid_min_balance" (use the domain errors, not HTTPException).
+'''
+tests = [{ runner = "pytest", path = "backend/tests/warmup/test_feature_minimum.py" }]
