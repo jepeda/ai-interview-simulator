@@ -5,6 +5,8 @@ In a temporary directory it:
   2. overlays the reference SOLUTIONS              -> each must PASS
 
 Usage:  uv run python scripts/verify_solutions.py      (or: npm run verify)
+        uv run python scripts/verify_solutions.py --only gen_eligibility   (one exercise + its features;
+        also includes not-yet-verified generated drafts)
 """
 
 import dataclasses
@@ -31,13 +33,14 @@ def copy_tree(src: Path, dst: Path) -> None:
 
 
 INTERVIEW_DIR = paths.BACKEND_DIR / "interview"
+ONLY: str | None = None  # --only <exercise id>
 
 
 def interview_feature_exercises() -> list[Exercise]:
     """Each AI-interview feature request as its own exercise (its suites aren't in the catalog)."""
     catalog = load_catalog()
     extra = []
-    for config_path in sorted(INTERVIEW_DIR.glob("*.toml")):
+    for config_path in [*sorted(INTERVIEW_DIR.glob("*.toml")), *paths.generated_config_files()]:
         config = tomllib.loads(config_path.read_text(encoding="utf-8"))
         base = catalog[config["id"]]
         for feature in config.get("feature", []):
@@ -56,6 +59,8 @@ def run_all(label: str, expect_ok: bool) -> list[str]:
     problems = []
     print(f"\n== {label} (expect {'PASS' if expect_ok else 'FAIL'}) ==")
     for ex in [*load_catalog().values(), *interview_feature_exercises()]:
+        if ONLY and ex.id != ONLY and not ex.id.startswith(f"{ONLY}:"):
+            continue
         result = run_exercise(ex)
         verdict = "PASS" if result["ok"] else "FAIL"
         good = result["ok"] == expect_ok
@@ -81,7 +86,7 @@ def main() -> int:
         copy_tree(paths.STARTERS_DIR / "frontend", frontend_clinic)
         os.environ["TRAINER_WORKSPACE"] = str(workspace)
         os.environ["CLINIC_SRC_DIR"] = str(frontend_clinic)
-        for app in paths.INTERVIEW_APPS:  # vite.config.ts reads <APP>_SRC_DIR
+        for app in [*paths.INTERVIEW_APPS, "gen"]:  # vite.config.ts reads <APP>_SRC_DIR
             copy_tree(paths.STARTERS_DIR / app, workspace / app)
             copy_tree(paths.STARTERS_DIR / f"{app}_web", tmp / f"frontend_{app}")
             os.environ[f"{app.upper()}_SRC_DIR"] = str(tmp / f"frontend_{app}")
@@ -92,7 +97,7 @@ def main() -> int:
         copy_tree(paths.SOLUTIONS_DIR / "clinic", workspace / "clinic")
         copy_tree(paths.SOLUTIONS_DIR / "booking", workspace / "booking")
         copy_tree(paths.SOLUTIONS_DIR / "frontend", frontend_clinic)
-        for app in paths.INTERVIEW_APPS:
+        for app in [*paths.INTERVIEW_APPS, "gen"]:
             copy_tree(paths.SOLUTIONS_DIR / app, workspace / app)
             copy_tree(paths.SOLUTIONS_DIR / f"{app}_web", tmp / f"frontend_{app}")
         problems += run_all("solutions", expect_ok=True)
@@ -106,4 +111,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--only" in sys.argv:
+        ONLY = sys.argv[sys.argv.index("--only") + 1]
+        os.environ["TRAINER_INCLUDE_DRAFTS"] = "1"
     raise SystemExit(main())

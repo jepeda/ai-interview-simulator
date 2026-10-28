@@ -13,7 +13,7 @@
     "noEmit": true,
     "types": ["node", "vite/client"],
     "baseUrl": ".",
-    "paths": { "@clinic/*": ["src/clinic/*"], "@payouts/*": ["src/payouts/*"], "@remits/*": ["src/remits/*"], "@earnings/*": ["src/earnings/*"], "@sandbox/*": ["src/sandbox/*"], "@warmup/*": ["src/warmup/*"] }
+    "paths": { "@clinic/*": ["src/clinic/*"], "@payouts/*": ["src/payouts/*"], "@remits/*": ["src/remits/*"], "@earnings/*": ["src/earnings/*"], "@sandbox/*": ["src/sandbox/*"], "@warmup/*": ["src/warmup/*"], "@gen/*": ["src/gen/*"] }
   },
   "include": ["src", "tests", "vite.config.ts"]
 }

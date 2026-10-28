@@ -189,6 +189,7 @@ export interface InterviewConfig {
   title: string;
   order: number;
   sandbox: boolean; // demo scenario: not counted in "Your attempts"
+  generated: boolean; // made with "Generate a new scenario"
   minutes: number;
   app_root: string; // e.g. backend/workspace/payouts
   portal_path: string; // e.g. /payouts.html
@@ -290,6 +291,32 @@ export interface ActivitySummary {
   files_opened: { path: string; at: number }[];
   idle_gaps: { at: number; seconds: number; away: boolean }[];
 }
+
+/** A "generate a new scenario" job (backend/trainer/generate.py). */
+export interface GenerateJob {
+  id: string;
+  status: "running" | "verifying" | "ready" | "failed";
+  company: string;
+  domain: string;
+  minutes: 30 | 60;
+  difficulty: "warmup" | "standard" | "hard";
+  pkg: string; // the scenario's exercise id once ready
+  steps: number;
+  last_tool: string | null;
+  title: string | null;
+  error: string | null;
+  cost_usd: number | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export const generateApi = {
+  jobs: () => request<GenerateJob[]>("/api/generate"),
+  start: (body: { company: string; domain: string; minutes: 30 | 60; difficulty: GenerateJob["difficulty"] }) =>
+    post<GenerateJob>("/api/generate", body),
+  dismiss: (id: string) => post<{ ok: boolean }>(`/api/generate/${id}/dismiss`),
+  deleteScenario: (pkg: string) => request<{ ok: boolean }>(`/api/generate/scenario/${pkg}`, { method: "DELETE" }),
+};
 
 /** One server-sent event of a streamed Claude reply. */
 export type ChatEvent =

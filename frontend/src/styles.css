@@ -245,13 +245,36 @@ select {
   padding: 0;
 }
 .sidebar-heading {
-  display: flex;
-  justify-content: space-between;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
-  margin: 8px 10px;
+  margin: 8px 4px;
+}
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.section-toggle:hover {
+  background: var(--surface);
+}
+.section-toggle .chevron {
+  width: 10px;
+}
+.section-toggle .muted {
+  margin-left: auto;
 }
 .sidebar a {
   display: flex;
@@ -1717,3 +1740,145 @@ body.resizing .monaco-editor {
 .pause-card h2 {
   margin: 6px 0 8px;
 }
+
+.generate-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin: 10px 0;
+}
+.generate-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.generate-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.generate-jobs .job {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.generate-jobs .job.ready {
+  border-color: var(--pass);
+}
+.generate-jobs .job.failed {
+  border-color: var(--fail);
+}
+.bad-text {
+  color: var(--fail);
+}
+
+
+/* ── App tab on exercises (booking app for proj1, clinic app for dbg*) ── */
+.exercise-app .app-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 10px;
+}
+
+/* ── API tester (proj1) ── */
+.api-tester {
+  display: grid;
+  gap: 10px;
+}
+.api-tester h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.api-request {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.api-base {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.api-url {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+}
+.api-body,
+.api-response {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.api-response {
+  max-height: 420px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.api-response-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.api-filter {
+  width: 100%;
+  margin-bottom: 6px;
+}
+.api-endpoints {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.api-endpoints button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.api-endpoints button:hover {
+  background: var(--surface);
+}
+.method {
+  display: inline-block;
+  min-width: 52px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.method.m-get { color: #16a34a; }
+.method.m-post { color: #d97706; }
+.method.m-put,
+.method.m-patch { color: #2563eb; }
+.method.m-delete { color: var(--fail); }
+.status {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--border);
+}
+.status.s2 { background: var(--pass-bg); color: var(--pass); }
+.status.s4 { background: var(--warn-bg); color: var(--warn); }
+.status.s5,
+.status.s0 { background: var(--fail-bg); color: var(--fail); }

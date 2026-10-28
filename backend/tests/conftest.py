@@ -21,6 +21,7 @@ if not (WORKSPACE_DIR / "drills").is_dir():
     )
 
 sys.path.insert(0, str(WORKSPACE_DIR))
+sys.path.insert(0, str(WORKSPACE_DIR / "gen"))  # generated interview scenarios (gen_* packages)
 
 REPO_DIR = BACKEND_DIR.parent
 

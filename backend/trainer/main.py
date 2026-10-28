@@ -17,7 +17,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from trainer import editor, interview, progress
+from trainer import editor, generate, interview, progress
 from trainer.catalog import Exercise, load_catalog
 from trainer.paths import CHEATSHEET_PATH, DATA_DIR, QUICKREF_DIR, REPO_ROOT
 from trainer.runner import run_exercise
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Python Interview Trainer", lifespan=lifespan)
 app.include_router(editor.router)
 app.include_router(interview.router)
+app.include_router(generate.router)
 
 
 def _get_exercise(exercise_id: str) -> Exercise:

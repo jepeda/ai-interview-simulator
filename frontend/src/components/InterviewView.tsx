@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  generateApi,
   interviewApi,
   requirementsPath,
   setInterviewScenario,
@@ -13,6 +14,7 @@ import {
 import { CodeEditor, type CodeEditorHandle } from "../editor/CodeEditor";
 import { readNumber, Splitter, store } from "../editor/Splitter";
 import { useActivityTracker } from "./interviewActivity";
+import { GenerateScenario } from "./GenerateScenario";
 import { InterviewAttempts } from "./InterviewAttempts";
 import { InterviewChat, messagesFromEvents } from "./InterviewChat";
 import { clock, sessionElapsed } from "./interviewClock";
@@ -593,7 +595,7 @@ function InterviewLanding({ snapshot, onStarted }: { snapshot: InterviewSnapshot
       <header className="exercise-header">
         <div className="exercise-title">
           <div className="eyebrow">
-            Mock AI interview #{config.order} of {scenarios.filter((s) => !s.sandbox).length} · {config.minutes} min
+            {config.generated ? "Generated scenario" : `Mock AI interview #${config.order}`} · {config.minutes} min
           </div>
           <h1>{config.title}</h1>
         </div>
@@ -601,7 +603,7 @@ function InterviewLanding({ snapshot, onStarted }: { snapshot: InterviewSnapshot
       <nav className="scenario-picker">
         {scenarios.map((s) => (
           <a key={s.id} href={`#/ex/${s.id}`} className={s.id === config.id ? "active" : ""}>
-            <span className="muted small">{s.sandbox ? "demo" : `#${s.order}`}</span> {s.title}
+            <span className="muted small">{s.sandbox ? "demo" : s.order >= 10 ? "✨" : `#${s.order}`}</span> {s.title}
           </a>
         ))}
       </nav>
@@ -658,12 +660,32 @@ function InterviewLanding({ snapshot, onStarted }: { snapshot: InterviewSnapshot
                 .finally(() => setBusy(false));
             }}
           >
-            {busy ? "Starting…" : `▶ Start interview #${config.order} (${config.minutes} min)`}
+            {busy ? "Starting…" : `▶ Start ${config.generated ? "the interview" : `interview #${config.order}`} (${config.minutes} min)`}
           </button>
         </p>
         <p className="muted small">The clock starts immediately. It doesn't pause; when it runs out you can keep going and it shows overtime.</p>
       </section>
       <InterviewAttempts />
+      <GenerateScenario />
+      {config.generated && (
+        <p className="muted small">
+          This scenario was generated.{" "}
+          <button
+            onClick={() => {
+              if (window.confirm(`Delete "${config.title}"? Its files are removed; your past session logs stay.`))
+                void generateApi
+                  .deleteScenario(config.id)
+                  .then(() => {
+                    window.location.hash = "#/";
+                    window.location.reload();
+                  })
+                  .catch((e: Error) => window.alert(e.message));
+            }}
+          >
+            Delete this generated scenario
+          </button>
+        </p>
+      )}
     </article>
   );
 }

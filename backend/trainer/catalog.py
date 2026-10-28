@@ -2,7 +2,7 @@ import tomllib
 from dataclasses import dataclass, field
 from functools import cache
 
-from trainer.paths import CATALOG_PATH, REPO_ROOT, rel
+from trainer.paths import CATALOG_PATH, REPO_ROOT, generated_config_files, rel
 from trainer.workspace import starter_files, starter_for
 
 
@@ -37,8 +37,15 @@ def roots_of(ex: Exercise) -> list[str]:
 def load_catalog() -> dict[str, Exercise]:
     with CATALOG_PATH.open("rb") as f:
         raw = tomllib.load(f)
+    items = list(raw["exercise"])
+    for path in generated_config_files():  # generated scenarios carry their own [exercise] table
+        try:
+            with path.open("rb") as f:
+                items.append(tomllib.load(f)["exercise"])
+        except (tomllib.TOMLDecodeError, KeyError):
+            continue  # a broken generated scenario must not take the trainer down
     exercises: dict[str, Exercise] = {}
-    for item in raw["exercise"]:
+    for item in items:
         root = item.get("root")
         files = item.get("files")
         if files is None:

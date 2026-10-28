@@ -18,6 +18,16 @@ frontend/src/remits/
 frontend/src/earnings/
 frontend/src/sandbox/
 frontend/src/warmup/
+frontend/src/gen/
+
+# Generated interview scenarios (yours, and full of spoilers)
+backend/starters/gen/
+backend/starters/gen_web/
+backend/solutions/gen/
+backend/solutions/gen_web/
+backend/tests/gen/
+frontend/tests/gen/
+backend/interview/generated/
 
 # Local databases (progress + clinic demo data)
 backend/data/

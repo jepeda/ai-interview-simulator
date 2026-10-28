@@ -16,6 +16,7 @@
     "dev:web": "npm run dev --prefix frontend",
     "test": "uv run pytest --continue-on-collection-errors",
     "test:web": "npm test --prefix frontend",
+    "test:trainer": "uv run pytest backend/tests/trainer -q && npm run test:trainer --prefix frontend",
     "reset": "uv run python scripts/workspace.py reset",
     "status": "uv run python scripts/workspace.py status",
     "verify": "uv run python scripts/verify_solutions.py"

@@ -18,7 +18,12 @@ const appDir = (name: string) => process.env[`${name.toUpperCase()}_SRC_DIR`] ??
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@clinic": clinicDir, ...Object.fromEntries(interviewApps.map((a) => [`@${a.name}`, appDir(a.name)])) },
+    alias: {
+      "@clinic": clinicDir,
+      ...Object.fromEntries(interviewApps.map((a) => [`@${a.name}`, appDir(a.name)])),
+      // Generated interview scenarios: frontend/src/gen/<package> (their APIs run on their own ports).
+      "@gen": appDir("gen"),
+    },
   },
   build: {
     rollupOptions: {
@@ -38,6 +43,11 @@ export default defineConfig({
     proxy: {
       // Trainer API (exercise catalog, test runner, progress)
       "/api": "http://127.0.0.1:8710",
+      // Booking API (the interview project, proj1): /booking-api/providers -> :8712/providers
+      "/booking-api": {
+        target: "http://127.0.0.1:8712",
+        rewrite: (p) => p.replace(/^\/booking-api/, ""),
+      },
       // Clinic API (the buggy app you're debugging): /clinic-api/patients -> :8711/patients
       "/clinic-api": {
         target: "http://127.0.0.1:8711",

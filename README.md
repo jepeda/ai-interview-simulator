@@ -14,7 +14,7 @@ the scenarios.
 - **5 FastAPI debugging challenges** in a fictional mental-health clinic app (FastAPI + SQLAlchemy + SQLite + Pydantic v2): eligibility rules, missing records, date sorting, validation errors, and stale frontend data (React + backend cache).
 - **Dashboard** (React + TS + Vite): pick an exercise, read the requirements, open the file in VS Code, run the tests, see pass/fail per test, reveal hints one at a time, and track progress.
 - **TS → Python cheat sheet** in the dashboard (source: [`docs/ts-to-python.md`](docs/ts-to-python.md)).
-- **Clinic App tab**: a small front-desk UI so you can *see* each debugging bug as a user would.
+- **App / API tabs** next to the editor: the debugging challenges show the clinic's front-desk UI so you can *see* each bug as a user would, and the project has a Postman-style API tester built from the service's OpenAPI spec.
 
 Every exercise starts broken or incomplete. Reference solutions are kept separately in `backend/solutions/`
 and the dashboard never shows them.
@@ -102,6 +102,13 @@ ends a real interview in progress) and it isn't counted in Your attempts. The pa
 - **Interviewer**: Claude playing the interviewer. Ask domain and product questions; it won't give away the answer.
 - **App**: the app's UI running your workspace code. **Narrate**: think out loud (speech to text in Chrome) or type notes.
 
+**Generate a new scenario** (bottom of any interview's start screen): name a company (and optionally what it does),
+pick a length and difficulty, and Claude Code builds a fresh scenario modeled on that company's product: a small app
+with a user-reported bug, tests, feature requests, a reference solution and hidden interviewer notes. It runs in the
+background (about 15–30 minutes), and the trainer only adds it to the list once the content check passes (the
+starter fails, the solution passes). Progress never reveals the bug. Generated scenarios run their API on their own
+port (8720+), started automatically, and are gitignored. A generated scenario's start screen can delete it.
+
 Every prompt, reply (with the tools Claude used and the files it edited), test run and note is logged with a timestamp in
 `backend/data/interview/<session>/`. **End interview** shows the timeline and your diff, and **Grade my interview** has
 Claude grade the session against the interview's criteria. Set `TRAINER_CLAUDE_MODEL` (e.g. `sonnet`) to pick the model.
@@ -153,7 +160,7 @@ backend/
   catalog.toml   exercise list: requirements, hints, files, tests
   data/          SQLite DBs: progress.db (your progress), clinic.db + booking.db (demo data)
 frontend/
-  src/           dashboard + Clinic App tab
+  src/           dashboard (the clinic UI lives in components/ClinicApp.tsx, shown in the dbg App tab)
   src/clinic/patientState.ts   YOUR working copy for dbg5 (frontend half)
   tests/         vitest suite for dbg5
 docs/ts-to-python.md           the cheat sheet
@@ -202,7 +209,7 @@ Recommended extensions: Python, Pylance, Python Debugger, Ruff, Even Better TOML
 
 ```bash
 npm run verify     # in a temp dir: every starter must FAIL, every reference solution must PASS
-uv run pytest backend/tests/trainer   # catalog/self-checks
+npm run test:trainer   # the trainer's own unit tests (backend + frontend); safe: uses temp data, never calls Claude
 ```
 
 `npm test` runs every exercise test against *your* working copies, so it fails until you've solved everything.

@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { trainerApi, type ExerciseSummary, type Meta } from "./api";
 import { CheatSheet } from "./components/CheatSheet";
-import { ClinicApp } from "./components/ClinicApp";
 import { ExerciseList } from "./components/ExerciseList";
 import { ExerciseView } from "./components/ExerciseView";
 import { InterviewView } from "./components/InterviewView";
 
-type Route = { page: "exercises"; id: string | null } | { page: "cheatsheet" } | { page: "clinic" };
+type Route = { page: "exercises"; id: string | null } | { page: "cheatsheet" };
 
 function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, "");
   if (hash === "cheatsheet") return { page: "cheatsheet" };
-  if (hash === "clinic") return { page: "clinic" };
   const match = hash.match(/^ex\/(\w+)$/);
   return { page: "exercises", id: match ? match[1] : null };
 }
@@ -129,9 +127,6 @@ export default function App() {
           <a className={route.page === "cheatsheet" ? "active" : ""} href="#/cheatsheet">
             TS → Python
           </a>
-          <a className={route.page === "clinic" ? "active" : ""} href="#/clinic">
-            Clinic App
-          </a>
         </nav>
         <div className="topbar-stats">
           <div className="progress-pill" title="Completed exercises">
@@ -176,7 +171,6 @@ export default function App() {
         </div>
       )}
       {route.page === "cheatsheet" && <CheatSheet />}
-      {route.page === "clinic" && <ClinicApp />}
     </div>
   );
 }

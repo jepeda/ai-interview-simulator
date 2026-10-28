@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -13,6 +13,8 @@ import {
 import { CodeEditor, type CodeEditorHandle } from "../editor/CodeEditor";
 import { readNumber, Splitter, store } from "../editor/Splitter";
 import { StatusDot } from "./ExerciseList";
+import { ApiTester } from "./ApiTester";
+import { ClinicApp } from "./ClinicApp";
 import { QuickRef } from "./QuickRef";
 import { TestResults } from "./TestResults";
 
@@ -30,7 +32,15 @@ const SIDE_WIDTH_KEY = "trainer.sideWidth";
 const SIDE_MIN = 280;
 const SIDE_COLLAPSE_BELOW = 160; // dragging narrower than this hides the panel
 const PANEL_TAB_KEY = "trainer.panelTab";
-type PanelTab = "results" | "docs";
+type PanelTab = "results" | "docs" | "app";
+
+/** The running app an exercise works on, shown in the panel's App tab (live: it uses your code). */
+function appFor(track: string): { title: string; docs: string; render: () => ReactNode } | null {
+  if (track === "project")
+    return { title: "Booking API tester", docs: "http://127.0.0.1:8712/docs", render: () => <ApiTester base="/booking-api" docs="http://127.0.0.1:8712/docs" /> };
+  if (track === "debugging") return { title: "Clinic app", docs: "http://127.0.0.1:8711/docs", render: () => <ClinicApp /> };
+  return null;
+}
 
 function readSetting(key: string, fallback: string): string {
   try {
@@ -74,6 +84,7 @@ export function ExerciseView({ id, meta, exercises, onChanged }: Props) {
   const [sideWidth, setSideWidth] = useState(() => readNumber(SIDE_WIDTH_KEY, Math.round(window.innerWidth * 0.34)));
   const sideDragStart = useRef(sideWidth);
   const [panelTab, setPanelTabState] = useState(() => readSetting(PANEL_TAB_KEY, "results") as PanelTab);
+  const [appKey, setAppKey] = useState(0); // bump to reload the App tab
   const editorRef = useRef<CodeEditorHandle>(null);
   const runningRef = useRef(false); // synchronous guard: one keypress = one run
 
@@ -132,6 +143,7 @@ export function ExerciseView({ id, meta, exercises, onChanged }: Props) {
       await editorRef.current?.saveAll();
       setPanelTab("results");
       await act("run", () => trainerApi.run(id));
+      setAppKey((k) => k + 1); // the API reloaded with your saved code: refresh the app too
     } catch (e) {
       setNotice({ kind: "error", text: `Couldn't save before running: ${(e as Error).message}` });
     } finally {
@@ -168,6 +180,7 @@ export function ExerciseView({ id, meta, exercises, onChanged }: Props) {
 
   const completed = ex.status === "completed";
   const hintsLeft = ex.hints_total - ex.hints.length;
+  const app = appFor(ex.track);
   const editors = meta?.editors ?? [];
   const index = exercises.findIndex((e) => e.id === ex.id);
   const goTo = (target: ExerciseSummary | undefined) => {
@@ -317,11 +330,27 @@ export function ExerciseView({ id, meta, exercises, onChanged }: Props) {
           <button role="tab" aria-selected={panelTab === "results"} className={panelTab === "results" ? "active" : ""} onClick={() => setPanelTab("results")}>
             Tests & hints
           </button>
+          {app && (
+            <button role="tab" aria-selected={panelTab === "app"} className={panelTab === "app" ? "active" : ""} onClick={() => setPanelTab("app")}>
+              {ex.track === "project" ? "API" : "App"}
+            </button>
+          )}
           <button role="tab" aria-selected={panelTab === "docs"} className={panelTab === "docs" ? "active" : ""} onClick={() => setPanelTab("docs")}>
             Quick ref
           </button>
         </div>
-        {panelTab === "docs" ? (
+        {panelTab === "app" && app ? (
+          <div className="exercise-app">
+            <div className="app-preview-bar">
+              <span className="muted small">{app.title} (your code, live)</span>
+              <button onClick={() => setAppKey((k) => k + 1)}>↻ Reload</button>
+              <a href={app.docs} target="_blank" rel="noreferrer">
+                API docs ↗
+              </a>
+            </div>
+            <div key={appKey}>{app.render()}</div>
+          </div>
+        ) : panelTab === "docs" ? (
           <QuickRef relevant={ex.quickref} />
         ) : (
           <>

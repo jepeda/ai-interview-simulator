@@ -15,8 +15,10 @@ import json
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import subprocess
+import sys
 import threading
 import tomllib
 import uuid
@@ -32,7 +34,7 @@ from pydantic import BaseModel
 
 from trainer import progress
 from trainer.catalog import Exercise, TestSuite, load_catalog, roots_of
-from trainer.paths import BACKEND_DIR, DATA_DIR, REPO_ROOT, rel
+from trainer.paths import BACKEND_DIR, DATA_DIR, REPO_ROOT, generated_config_files, rel
 from trainer.runner import run_exercise
 from trainer.workspace import reset_files, starter_files, starter_for
 
@@ -61,10 +63,55 @@ _procs: dict[str, subprocess.Popen] = {}  # running Claude process per persona (
 def load_configs() -> list[dict]:
     """Every scenario, in attempt order."""
     configs = []
-    for path in CONFIG_DIR.glob("*.toml"):
-        with path.open("rb") as f:
-            configs.append(tomllib.load(f))
+    for path in [*CONFIG_DIR.glob("*.toml"), *generated_config_files()]:
+        try:
+            with path.open("rb") as f:
+                configs.append(tomllib.load(f))
+        except tomllib.TOMLDecodeError:
+            continue  # a broken generated scenario must not take the interview screens down
     return sorted(configs, key=lambda c: (c.get("order", 99), c["id"]))
+
+
+def app_dirs(cfg: dict) -> dict[str, str]:
+    """Repo-relative folders of a scenario's app: stock apps sit at the top level, generated ones
+    under gen/ (see trainer/generate.py)."""
+    app = cfg.get("app", "payouts")
+    sub = f"gen/{app}" if cfg.get("generated") else app
+    return {
+        "api": f"backend/workspace/{sub}",
+        "backend_tests": f"backend/tests/{sub}",
+        "frontend_tests": f"frontend/tests/{sub}",
+    }
+
+
+_servers: dict[str, subprocess.Popen] = {}  # generated apps' API processes, by app
+
+
+def ensure_app_server(cfg: dict) -> None:
+    """Generated apps aren't in `npm run dev`: start their API (with reload) on first use."""
+    if not cfg.get("generated"):
+        return
+    port = cfg["api_port"]
+    with closing(socket.socket()) as sock:
+        sock.settimeout(0.3)
+        if sock.connect_ex(("127.0.0.1", port)) == 0:
+            return  # already up
+    app = cfg["app"]
+    log = (DATA_DIR / "generate" / f"{app}.server.log").open("a", encoding="utf-8") if (DATA_DIR / "generate").is_dir() else subprocess.DEVNULL
+    _servers[app] = subprocess.Popen(
+        [
+            sys.executable, "-m", "uvicorn", f"{app}.main:app",
+            "--app-dir", "backend/workspace/gen", "--host", "127.0.0.1", "--port", str(port),
+            "--reload", "--reload-dir", f"backend/workspace/gen/{app}",
+        ],
+        cwd=REPO_ROOT, stdout=log, stderr=log,
+    )
+
+
+def stop_app_server(app: str) -> None:
+    proc = _servers.pop(app, None)
+    if proc:
+        proc.terminate()
 
 
 def load_config(scenario: str | None = None) -> dict:
@@ -201,7 +248,8 @@ def _public(cfg: dict, state: dict | None) -> dict:
         "order": cfg.get("order", 1),
         "sandbox": cfg.get("sandbox", False),
         "minutes": cfg.get("minutes", 60),
-        "app_root": f"backend/workspace/{cfg.get('app', 'payouts')}",
+        "app_root": app_dirs(cfg)["api"],
+        "generated": cfg.get("generated", False),
         "portal_path": cfg.get("portal_path", "/payouts.html"),
         "portal_title": cfg.get("portal_title", "Provider portal"),
         "api_port": cfg.get("api_port", 8713),
@@ -302,7 +350,7 @@ def _reset_demo_data(cfg: dict) -> None:
             for table in tables:
                 conn.execute(f'DROP TABLE IF EXISTS "{table}"')
             conn.commit()
-    main = REPO_ROOT / "backend" / "workspace" / app / "main.py"
+    main = REPO_ROOT / app_dirs(cfg)["api"] / "main.py"
     if main.exists():
         main.write_bytes(main.read_bytes())  # a write event on every OS -> uvicorn --reload
 
@@ -414,6 +462,8 @@ def get_interview(scenario: str | None = None) -> dict:
         active = {"scenario": real.get("exercise"), "session_id": real["session_id"], "elapsed": _elapsed(real)}
     if scenario and not (state and state.get("exercise") == scenario):
         state = None
+    if state and not state.get("ended_at"):
+        ensure_app_server(_state_config(state))  # e.g. after the trainer restarted mid-interview
     return {**_snapshot(state, scenario), "active": active}
 
 
@@ -432,6 +482,7 @@ def start(body: StartBody) -> dict:
     if body.reset_code:
         _reset_codebase(ex)
     _reset_demo_data(cfg)  # fresh, buggy demo data: the ticket must reproduce on every attempt
+    ensure_app_server(cfg)
     state = {
         "session_id": _now().strftime("%Y%m%d-%H%M%S"),
         "exercise": ex.id,
@@ -787,11 +838,11 @@ def _deny_rules() -> list[str]:
 
 def _assistant_args(cfg: dict) -> tuple[list[str], Path, str]:
     ex = _exercise(cfg)
-    app = cfg.get("app", "payouts")
+    dirs = app_dirs(cfg)
     api_dir = REPO_ROOT / ex.root
     extra = [REPO_ROOT / r for r in ex.extra_roots]
-    test_dirs = [p for p in (REPO_ROOT / f"backend/tests/{app}", REPO_ROOT / f"frontend/tests/{app}") if p.is_dir()]
-    test_cmd = f"uv run pytest {(REPO_ROOT / f'backend/tests/{app}').as_posix()} -q"
+    test_dirs = [p for p in (REPO_ROOT / dirs["backend_tests"], REPO_ROOT / dirs["frontend_tests"]) if p.is_dir()]
+    test_cmd = f"uv run pytest {(REPO_ROOT / dirs['backend_tests']).as_posix()} -q"
     summary = cfg.get("app_summary", "A provider-payments system.")
     system = (
         "You are the AI coding assistant built into the candidate's browser IDE during a live technical "
@@ -799,8 +850,8 @@ def _assistant_args(cfg: dict) -> tuple[list[str], Path, str]:
         "answer questions, explain code, propose and make changes when asked. Keep answers focused and "
         f"reasonably short; the candidate is on a {cfg.get('minutes', 60)}-minute clock.\n"
         f"{summary.strip()}\nBackend API in {api_dir.as_posix()} (FastAPI, SQLAlchemy, SQLite); "
-        f"React/TypeScript frontend in {', '.join(p.as_posix() for p in extra)}. Tests: backend/tests/{app} "
-        f"(run with `{test_cmd}`) and frontend/tests/{app} (vitest; the candidate runs those with the "
+        f"React/TypeScript frontend in {', '.join(p.as_posix() for p in extra)}. Tests: {dirs['backend_tests']} "
+        f"(run with `{test_cmd}`) and {dirs['frontend_tests']} (vitest; the candidate runs those with the "
         "Run tests button). Only work inside those folders. Never look for reference solutions, starter "
         "copies, interview notes or anything outside the application: it is off limits."
     )
